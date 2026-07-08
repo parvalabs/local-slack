@@ -12,7 +12,9 @@ It's the inverse of test-interception libraries like `slack-testing-library` / `
 running server with a browser UI, plus a programmatic control API so it can also drive automated
 tests.
 
-![local-slack demo: message echo, buttons, a modal, a slash command, a reaction, and an @mention](https://github.com/parvalabs/local-slack/releases/download/v0.1.0/local-slack-demo.gif)
+<video src="https://github.com/parvalabs/local-slack/releases/download/v0.1.0/local-slack-demo.mov" controls muted playsinline width="760">
+  Demo: message echo, buttons, a modal, a slash command, a reaction, and an @mention.
+</video>
 
 ## What it supports
 
