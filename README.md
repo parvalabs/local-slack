@@ -12,6 +12,8 @@ It's the inverse of test-interception libraries like `slack-testing-library` / `
 running server with a browser UI, plus a programmatic control API so it can also drive automated
 tests.
 
+![local-slack demo: message echo, buttons, a modal, a slash command, a reaction, and an @mention](https://github.com/parvalabs/local-slack/releases/download/v0.1.0/local-slack-demo.gif)
+
 ## What it supports
 
 - **Web API** — `auth.test`, `chat.*`, `conversations.*`, `users.*`, `views.*`, `reactions.*`, `apps.connections.open`, `team.info`, `bots.info`
