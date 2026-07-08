@@ -236,8 +236,6 @@ cd server && bun pm pack   # writes local-slack-<version>.tgz; inspect/extract i
 Note `npx`/`bunx` both just exec the `bin` entry, whose shebang is `#!/usr/bin/env bun` — Bun must
 be installed wherever it runs, same as everywhere else in this project.
 
-Before actually publishing, you'll want to add a `repository` URL once this has a real remote.
-
 ## Architecture
 
 - **Runtime:** Bun. **HTTP:** Hono (runtime-agnostic). **WebSockets:** `Bun.serve` native.

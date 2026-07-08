@@ -5,6 +5,11 @@
   "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots.",
   "keywords": ["slack", "mock", "testing", "bolt", "socket-mode", "cli"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parvalabs/local-slack.git",
+    "directory": "server"
+  },
   "bin": {
     "local-slack": "./src/cli.ts"
   },

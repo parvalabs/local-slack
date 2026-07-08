@@ -5,6 +5,10 @@
   "type": "module",
   "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parvalabs/local-slack.git"
+  },
   "workspaces": [
     "server",
     "web",
