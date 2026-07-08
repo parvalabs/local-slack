@@ -331,6 +331,12 @@ body {
   border-radius: 3px;
   padding: 0 2px;
 }
+.channel-mention {
+  cursor: pointer;
+}
+.channel-mention:hover {
+  text-decoration: underline;
+}
 .msg-reactions {
   margin-top: 4px;
   display: flex;
@@ -540,6 +546,10 @@ body {
   font-weight: 700;
   font-size: 10px;
   flex: 0 0 auto;
+}
+.mention-option-channel {
+  background: var(--muted);
+  font-size: 13px;
 }
 .mention-option-name {
   font-weight: 600;

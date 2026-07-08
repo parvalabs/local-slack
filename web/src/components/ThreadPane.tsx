@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Message as Msg, User } from "../types.ts";
+import type { Channel, Message as Msg, User } from "../types.ts";
 import { Message } from "./Message.tsx";
 import { Composer } from "./Composer.tsx";
 import { postMessage, sendSlashCommand } from "../client.ts";
@@ -11,6 +11,7 @@ export function ThreadPane({
   root,
   replies,
   users,
+  channels,
   actingUser,
   activeAppId,
   onClose,
@@ -19,6 +20,7 @@ export function ThreadPane({
   root: Msg;
   replies: Msg[];
   users: User[];
+  channels: Channel[];
   actingUser: string;
   activeAppId: string;
   onClose: () => void;
@@ -60,7 +62,7 @@ export function ThreadPane({
         ))}
       </div>
 
-      <Composer placeholder="Reply in thread…" onSend={send} users={users} />
+      <Composer placeholder="Reply in thread…" onSend={send} users={users} channels={channels} />
     </aside>
   );
 }

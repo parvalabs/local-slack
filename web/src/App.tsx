@@ -8,6 +8,7 @@ import { Modal } from "./components/Modal.tsx";
 import { HomeTab } from "./components/HomeTab.tsx";
 import { Inspector } from "./components/Inspector.tsx";
 import { ThreadPane } from "./components/ThreadPane.tsx";
+import { setChannelClickHandler } from "./blockkit/channels.ts";
 import { channelLabel } from "./util.ts";
 
 export function App() {
@@ -20,6 +21,11 @@ export function App() {
 
   useEffect(() => {
     connect();
+  }, []);
+
+  // Clicking a #channel reference in a rendered message jumps to that channel tab.
+  useEffect(() => {
+    setChannelClickHandler(setSelectedId);
   }, []);
 
   const botUserIds = useMemo(() => state.apps.map((a) => a.botUserId), [state.apps]);
@@ -206,6 +212,7 @@ export function App() {
                 placeholder={`Message ${channel.is_im ? "" : "#"}${channelLabel(channel, state.users, botUserIds)} as ${humans.find((u) => u.id === actingUser)?.name ?? "…"} — try /echo hi`}
                 onSend={send}
                 users={state.users}
+                channels={state.channels}
               />
             )}
           </main>
@@ -217,6 +224,7 @@ export function App() {
             root={openThreadRoot}
             replies={openThreadReplies}
             users={state.users}
+            channels={state.channels}
             actingUser={actingUser}
             activeAppId={activeAppId}
             onClose={() => setOpenThreadTs(null)}

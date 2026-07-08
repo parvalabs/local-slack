@@ -1,5 +1,6 @@
 import type { AppInfo, Channel, LogEntry, Message, User, Workspace } from "./types.ts";
 import { setUserNames } from "./blockkit/mentions.ts";
+import { setChannelNames } from "./blockkit/channels.ts";
 
 export interface State {
   connected: boolean; // UI <-> server websocket
@@ -42,6 +43,7 @@ export function subscribe(l: () => void): () => void {
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };
   if (patch.users) setUserNames(patch.users);
+  if (patch.channels) setChannelNames(patch.channels);
   for (const l of listeners) l();
 }
 

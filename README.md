@@ -23,7 +23,7 @@ tests.
 - **Threads** — a docked thread pane (reply summaries on the parent message, `conversations.replies`, `reply_count`/`latest_reply` on the parent via `conversations.history`)
 - **Human-driven reactions, edit, and delete** — react from the UI (delivers `reaction_added`/`reaction_removed`), and edit/delete your own messages (delivers `message_changed`/`message_deleted`); bot messages can't be edited/deleted this way
 - **Multiple apps in one workspace** — declare several apps under `apps:`; each gets its own tokens, delivery mode, Socket Mode connection(s) and Home tab. Channel events fan out to every app that's a member; interactive components (buttons/modals) and slash commands route to the specific app that owns them
-- **@mention autocomplete** — type `@` in the composer to pick any user or bot; inserts real `<@USER_ID>` syntax so the bot receives an actual mention, not literal text
+- **@mention and #channel autocomplete** — type `@` or `#` in the composer to pick a user/bot or a channel; both render inline with the same blue/highlight style they'd have once sent, but insert real `<@USER_ID>` / `<#CHANNEL_ID|name>` syntax so the bot receives an actual reference, not literal text. Channel references in a rendered message are clickable and jump to that channel's tab
 - **Emoji rendering** — `:shortcode:` in message text and reaction pills render as the actual emoji character
 - **Inspector** — a live view of raw traffic to/from the bot (envelopes, HTTP, acks, Web API calls)
 
