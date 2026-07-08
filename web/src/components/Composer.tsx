@@ -250,31 +250,6 @@ export function Composer({
                 return;
               }
             }
-            // Backspace right after a reference deletes the whole thing in one keystroke,
-            // matching Slack's own composer, instead of nibbling the display text apart.
-            if (e.key === "Backspace" && !trigger) {
-              const el = textareaRef.current;
-              const at = el?.selectionStart ?? -1;
-              if (at >= 0 && at === el?.selectionEnd) {
-                const span = spans.find((s) => s.end === at);
-                if (span) {
-                  e.preventDefault();
-                  const newText = text.slice(0, span.start) + text.slice(span.end);
-                  setText(newText);
-                  setSpans((prev) =>
-                    prev
-                      .filter((s) => s !== span)
-                      .map((s) =>
-                        s.start > span.start
-                          ? { ...s, start: s.start - (span.end - span.start), end: s.end - (span.end - span.start) }
-                          : s,
-                      ),
-                  );
-                  requestAnimationFrame(() => textareaRef.current?.setSelectionRange(span.start, span.start));
-                  return;
-                }
-              }
-            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               send();
