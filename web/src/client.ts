@@ -151,3 +151,15 @@ export function sendSlashCommand(channel: string, user: string, command: string,
 export function openHome(user: string) {
   ws?.send(JSON.stringify({ t: "open_home", user }));
 }
+
+export function sendReaction(channel: string, ts: string, user: string, name: string, present: boolean) {
+  ws?.send(JSON.stringify({ t: "reaction", channel, ts, user, name, present }));
+}
+
+export function editMessage(channel: string, ts: string, user: string, text: string) {
+  ws?.send(JSON.stringify({ t: "edit_message", channel, ts, user, text }));
+}
+
+export function deleteMessage(channel: string, ts: string, user: string) {
+  ws?.send(JSON.stringify({ t: "delete_message", channel, ts, user }));
+}

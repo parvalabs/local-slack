@@ -114,6 +114,37 @@ export class Store extends EventEmitter {
     return true;
   }
 
+  /** Add or remove a single user's reaction on a message. Used by both the bot's
+   *  reactions.add/remove (Web API) and human reactions from the UI/control API. */
+  setReaction(
+    channel: string,
+    ts: string,
+    name: string,
+    userId: string,
+    present: boolean,
+  ): SlackMessage | undefined {
+    const msg = this.findMessage(channel, ts);
+    if (!msg) return undefined;
+    msg.reactions ??= [];
+    let r = msg.reactions.find((x) => x.name === name);
+    if (present) {
+      if (!r) {
+        r = { name, users: [], count: 0 };
+        msg.reactions.push(r);
+      }
+      if (!r.users.includes(userId)) {
+        r.users.push(userId);
+        r.count = r.users.length;
+      }
+    } else if (r) {
+      r.users = r.users.filter((u) => u !== userId);
+      r.count = r.users.length;
+      if (r.count === 0) msg.reactions = msg.reactions.filter((x) => x.name !== name);
+    }
+    this.emit("message_update", msg);
+    return msg;
+  }
+
   /** Find or create a direct-message channel between a user and the bot. */
   openDm(userId: string): ChannelConfig {
     for (const c of this.channels.values()) {

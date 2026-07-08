@@ -292,6 +292,10 @@ body {
   font-size: 12px;
   font-style: italic;
 }
+.msg-edited {
+  color: var(--muted);
+  font-size: 12px;
+}
 .msg-text {
   white-space: pre-wrap;
   word-break: break-word;
@@ -318,7 +322,84 @@ body {
   background: #eef;
   border: 1px solid #dde;
   border-radius: 10px;
-  padding: 0 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.reaction:hover {
+  background: #e0e0f8;
+}
+.reaction.mine {
+  background: #e0f0ff;
+  border-color: #1264a3;
+  color: #1264a3;
+}
+
+/* Inline message edit */
+.msg-edit {
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 520px;
+}
+.msg-edit-input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+  resize: vertical;
+}
+.msg-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Emoji picker */
+.emoji-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.emoji-picker {
+  position: absolute;
+  top: 40px;
+  right: 60px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 10px;
+  width: 220px;
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.emoji-option {
+  background: none;
+  border: none;
+  font-size: 20px;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.emoji-option:hover {
+  background: #f0f0f0;
+}
+.emoji-custom {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.emoji-custom-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
   font-size: 12px;
 }
 

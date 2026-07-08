@@ -259,28 +259,15 @@ export const methods: Record<string, Handler> = {
   // ---- reactions ----------------------------------------------------------
   "reactions.add": (args, { store }) => {
     const channel = resolveChannelId(store, args.channel);
-    const msg = store.findMessage(channel, args.timestamp);
-    if (!msg) return err("message_not_found");
-    msg.reactions ??= [];
-    let r = msg.reactions.find((x) => x.name === args.name);
-    if (!r) {
-      r = { name: args.name, users: [], count: 0 };
-      msg.reactions.push(r);
-    }
-    if (!r.users.includes(store.botUserId)) {
-      r.users.push(store.botUserId);
-      r.count = r.users.length;
-    }
-    store.updateMessage(channel, args.timestamp, {});
+    if (!store.findMessage(channel, args.timestamp)) return err("message_not_found");
+    store.setReaction(channel, args.timestamp, args.name, store.botUserId, true);
     return ok();
   },
 
   "reactions.remove": (args, { store }) => {
     const channel = resolveChannelId(store, args.channel);
-    const msg = store.findMessage(channel, args.timestamp);
-    if (!msg?.reactions) return err("message_not_found");
-    msg.reactions = msg.reactions.filter((r) => r.name !== args.name);
-    store.updateMessage(channel, args.timestamp, {});
+    if (!store.findMessage(channel, args.timestamp)) return err("message_not_found");
+    store.setReaction(channel, args.timestamp, args.name, store.botUserId, false);
     return ok();
   },
 };

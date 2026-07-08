@@ -11,6 +11,9 @@ import {
   userViewClose,
   userSlashCommand,
   openAppHome,
+  userReaction,
+  userEditMessage,
+  userDeleteMessage,
 } from "../actions.ts";
 
 /**
@@ -116,6 +119,30 @@ export class UiGateway {
         break;
       case "open_home":
         await openAppHome(this.store, this.gateway, { user: msg.user });
+        break;
+      case "reaction":
+        await userReaction(this.store, this.gateway, {
+          channel: msg.channel,
+          ts: msg.ts,
+          user: msg.user,
+          name: msg.name,
+          present: msg.present,
+        });
+        break;
+      case "edit_message":
+        await userEditMessage(this.store, this.gateway, {
+          channel: msg.channel,
+          ts: msg.ts,
+          user: msg.user,
+          text: msg.text,
+        });
+        break;
+      case "delete_message":
+        await userDeleteMessage(this.store, this.gateway, {
+          channel: msg.channel,
+          ts: msg.ts,
+          user: msg.user,
+        });
         break;
     }
   }

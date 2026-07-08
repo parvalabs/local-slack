@@ -19,6 +19,7 @@ tests.
 - **Interactivity** — Block Kit rendering, buttons → `block_actions`, modals via `views.open/update/push` + `view_submission` (with `response_action` errors/update/push/clear)
 - **Slash commands** and the **App Home** tab
 - **Threads** — a docked thread pane (reply summaries on the parent message, `conversations.replies`, `reply_count`/`latest_reply` on the parent via `conversations.history`)
+- **Human-driven reactions, edit, and delete** — react from the UI (delivers `reaction_added`/`reaction_removed`), and edit/delete your own messages (delivers `message_changed`/`message_deleted`); bot messages can't be edited/deleted this way
 - **Inspector** — a live view of raw traffic to/from the bot (envelopes, HTTP, acks, Web API calls)
 
 ## Requirements
@@ -125,6 +126,9 @@ Drive the workspace and inspect bot traffic without the UI (base `http://localho
 | POST | `/message` | `{ channel, user, text, thread_ts? }` |
 | POST | `/command` | `{ channel, user, command, text }` |
 | POST | `/interact` | `{ channel, messageTs, user, action }` |
+| POST | `/reaction` | `{ channel, ts, user, name, present? }` (present defaults `true`) |
+| POST | `/edit-message` | `{ channel, ts, user, text }` (only the message's own author may edit) |
+| POST | `/delete-message` | `{ channel, ts, user }` (only the message's own author may delete) |
 | POST | `/open-home` | `{ user }` |
 | POST | `/reset` | — (restore config baseline) |
 | GET | `/log` | ordered record of all bot-facing traffic |

@@ -7,6 +7,9 @@ import {
   userBlockAction,
   userSlashCommand,
   openAppHome,
+  userReaction,
+  userEditMessage,
+  userDeleteMessage,
 } from "../actions.ts";
 
 /**
@@ -82,6 +85,51 @@ export function controlRouter(store: Store, gateway: BotGateway, interactions: I
     if (!body.user) return c.json({ ok: false, error: "user is required" }, 400);
     await openAppHome(store, gateway, { user: body.user });
     return c.json({ ok: true });
+  });
+
+  // Simulate a human reacting (or un-reacting) to a message.
+  app.post("/reaction", async (c) => {
+    const body: any = await c.req.json().catch(() => ({}));
+    if (!body.channel || !body.ts || !body.user || !body.name) {
+      return c.json({ ok: false, error: "channel, ts, user and name are required" }, 400);
+    }
+    await userReaction(store, gateway, {
+      channel: body.channel,
+      ts: body.ts,
+      user: body.user,
+      name: body.name,
+      present: body.present ?? true,
+    });
+    return c.json({ ok: true });
+  });
+
+  // Simulate a human editing their own message.
+  app.post("/edit-message", async (c) => {
+    const body: any = await c.req.json().catch(() => ({}));
+    if (!body.channel || !body.ts || !body.user || body.text === undefined) {
+      return c.json({ ok: false, error: "channel, ts, user and text are required" }, 400);
+    }
+    const result = await userEditMessage(store, gateway, {
+      channel: body.channel,
+      ts: body.ts,
+      user: body.user,
+      text: body.text,
+    });
+    return c.json(result, result.ok ? 200 : 400);
+  });
+
+  // Simulate a human deleting their own message.
+  app.post("/delete-message", async (c) => {
+    const body: any = await c.req.json().catch(() => ({}));
+    if (!body.channel || !body.ts || !body.user) {
+      return c.json({ ok: false, error: "channel, ts and user are required" }, 400);
+    }
+    const result = await userDeleteMessage(store, gateway, {
+      channel: body.channel,
+      ts: body.ts,
+      user: body.user,
+    });
+    return c.json(result, result.ok ? 200 : 400);
   });
 
   // Restore the workspace to its config baseline.

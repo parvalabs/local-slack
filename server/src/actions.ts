@@ -54,6 +54,75 @@ export async function userPostMessage(
   return msg;
 }
 
+/** A human adds or removes a reaction on a message from the UI. */
+export async function userReaction(
+  store: Store,
+  gateway: BotGateway,
+  opts: { channel: string; ts: string; user: string; name: string; present: boolean },
+): Promise<void> {
+  const msg = store.setReaction(opts.channel, opts.ts, opts.name, opts.user, opts.present);
+  if (!msg) return;
+  await gateway.deliverEvent({
+    type: opts.present ? "reaction_added" : "reaction_removed",
+    user: opts.user,
+    reaction: opts.name,
+    item: { type: "message", channel: opts.channel, ts: opts.ts },
+    item_user: msg.user,
+    event_ts: nextTs(),
+  });
+}
+
+/** A human edits their own message from the UI. Bots' messages can't be edited this way. */
+export async function userEditMessage(
+  store: Store,
+  gateway: BotGateway,
+  opts: { channel: string; ts: string; user: string; text: string },
+): Promise<{ ok: boolean; error?: string; message?: SlackMessage }> {
+  const msg = store.findMessage(opts.channel, opts.ts);
+  if (!msg) return { ok: false, error: "message_not_found" };
+  if (msg.user !== opts.user) return { ok: false, error: "not_authorized" };
+
+  const previous_message = { ...msg };
+  const updated = store.updateMessage(opts.channel, opts.ts, {
+    text: opts.text,
+    edited: { user: opts.user, ts: nextTs() },
+  })!;
+
+  await gateway.deliverEvent({
+    type: "message",
+    subtype: "message_changed",
+    channel: opts.channel,
+    ts: nextTs(),
+    event_ts: nextTs(),
+    message: updated,
+    previous_message,
+  });
+  return { ok: true, message: updated };
+}
+
+/** A human deletes their own message from the UI. Bots' messages can't be deleted this way. */
+export async function userDeleteMessage(
+  store: Store,
+  gateway: BotGateway,
+  opts: { channel: string; ts: string; user: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const msg = store.findMessage(opts.channel, opts.ts);
+  if (!msg) return { ok: false, error: "message_not_found" };
+  if (msg.user !== opts.user) return { ok: false, error: "not_authorized" };
+
+  store.deleteMessage(opts.channel, opts.ts);
+  await gateway.deliverEvent({
+    type: "message",
+    subtype: "message_deleted",
+    channel: opts.channel,
+    ts: nextTs(),
+    event_ts: nextTs(),
+    deleted_ts: opts.ts,
+    previous_message: msg,
+  });
+  return { ok: true };
+}
+
 /** A human typed a slash command in the composer. */
 export async function userSlashCommand(
   store: Store,

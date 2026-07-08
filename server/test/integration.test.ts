@@ -150,6 +150,64 @@ describe("Socket Mode delivery", () => {
     expect(state.users.some((u: any) => u.id === "U0BOT")).toBe(true);
     expect(state.channels.some((c: any) => c.id === "C01GEN")).toBe(true);
   });
+
+  test("/_control/reaction, /edit-message and /delete-message deliver the matching bot events", async () => {
+    const ws = new WebSocket(`${wsBase}/socket/test-conn-4`);
+    const collector = makeCollector(ws);
+    await waitOpen(ws);
+    await collector.next(); // hello
+
+    const { response: postRes } = await postControlAndAck(base, ws, collector, "/message", {
+      channel: "C01GEN",
+      user: "U01ALICE",
+      text: "reactable",
+    });
+    const { message: root } = await json(postRes);
+
+    const { envelope: reactionEnvelope, response: reactionRes } = await postControlAndAck(
+      base,
+      ws,
+      collector,
+      "/reaction",
+      { channel: "C01GEN", ts: root.ts, user: "U01ALICE", name: "tada" },
+    );
+    expect(reactionEnvelope.payload.event.type).toBe("reaction_added");
+    expect(reactionEnvelope.payload.event.reaction).toBe("tada");
+    expect(reactionRes.status).toBe(200);
+
+    const { envelope: editEnvelope, response: editRes } = await postControlAndAck(
+      base,
+      ws,
+      collector,
+      "/edit-message",
+      { channel: "C01GEN", ts: root.ts, user: "U01ALICE", text: "reactable, edited" },
+    );
+    expect(editEnvelope.payload.event.subtype).toBe("message_changed");
+    expect(editEnvelope.payload.event.message.text).toBe("reactable, edited");
+    expect((await json(editRes)).ok).toBe(true);
+
+    // Editing as someone else is rejected before any delivery is attempted.
+    const forbidden = await fetch(`${base}/_control/edit-message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "C01GEN", ts: root.ts, user: "U02BOB", text: "hijacked" }),
+    });
+    expect(forbidden.status).toBe(400);
+    expect((await json(forbidden)).error).toBe("not_authorized");
+
+    const { envelope: deleteEnvelope, response: deleteRes } = await postControlAndAck(
+      base,
+      ws,
+      collector,
+      "/delete-message",
+      { channel: "C01GEN", ts: root.ts, user: "U01ALICE" },
+    );
+    expect(deleteEnvelope.payload.event.subtype).toBe("message_deleted");
+    expect(deleteEnvelope.payload.event.deleted_ts).toBe(root.ts);
+    expect((await json(deleteRes)).ok).toBe(true);
+
+    ws.close();
+  });
 });
 
 describe("Events API (HTTP) delivery", () => {
