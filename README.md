@@ -215,6 +215,28 @@ bun run build:binary   # builds the UI, inlines it, and compiles a standalone ex
 Produces `./local-slack` — a standalone binary (no Bun/Node needed on the target) with the web UI
 embedded.
 
+## Publishing / running via bunx or npx
+
+The publishable package lives in [`server/`](server) and is named `local-slack` — that's the
+package `bunx local-slack` / `npx local-slack` would install and run, independent of this
+monorepo's root package (`local-slack-workspace`, private, never published).
+
+It's self-contained: `server/package.json`'s `prepublishOnly` builds the web UI and stages a copy
+into `server/public/` (via [`server/scripts/copy-ui.ts`](server/scripts/copy-ui.ts)), which is
+included in the published files alongside `src/`. `npm publish` from `server/` (after `npm login`)
+runs that automatically. To sanity-check the packed contents without actually publishing:
+
+```bash
+cd server && bun pm pack   # writes local-slack-<version>.tgz; inspect/extract it to confirm
+                            # public/index.html and src/ are both present, no web/ dependency
+```
+
+Note `npx`/`bunx` both just exec the `bin` entry, whose shebang is `#!/usr/bin/env bun` — Bun must
+be installed wherever it runs, same as everywhere else in this project.
+
+Before actually publishing, you'll want to add a `license` field (none is set yet — that's a real
+choice for you to make) and a `repository` URL once this has a real remote.
+
 ## Architecture
 
 - **Runtime:** Bun. **HTTP:** Hono (runtime-agnostic). **WebSockets:** `Bun.serve` native.

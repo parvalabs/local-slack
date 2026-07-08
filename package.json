@@ -1,5 +1,5 @@
 {
-  "name": "local-slack",
+  "name": "local-slack-workspace",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -14,7 +14,7 @@
     "dev": "bun run scripts/dev.ts",
     "dev:server": "cd server && bun --watch src/cli.ts --config ../examples/config.yaml --port 3000",
     "dev:web": "cd web && bun run dev",
-    "build:web": "cd web && bun run build",
+    "build:web": "cd web && bun run build && cd ../server && bun scripts/copy-ui.ts",
     "build:binary": "bun run build:web && cd server && bun build --compile --minify src/cli.ts --outfile ../local-slack",
     "start": "cd server && bun src/cli.ts --config ../examples/config.yaml --port 3000",
     "test": "cd server && bun test"

@@ -11,7 +11,11 @@ import { webApiRouter } from "./web-api/router.ts";
 import { controlRouter } from "./control/router.ts";
 import { hooksRouter } from "./hooks/router.ts";
 
-const UI_DIST = join(import.meta.dir, "../../web/dist");
+// A package-relative copy of the built UI (staged here by `bun run build:web` /
+// `scripts/copy-ui.ts`), NOT the monorepo's web/dist — this is what makes the
+// server package self-contained when published/installed standalone (bunx/npx),
+// not just when run from inside this repo.
+const UI_DIST = join(import.meta.dir, "../public");
 
 // Embed the built single-file UI into the `bun build --compile` binary. The static
 // string import is analyzed by Bun's bundler; the try/catch keeps `bun run` working
@@ -19,7 +23,7 @@ const UI_DIST = join(import.meta.dir, "../../web/dist");
 // on disk in dev, embedded virtual path in the compiled binary).
 let embeddedIndex: string | null = null;
 try {
-  const mod: any = await import("../../web/dist/index.html", { with: { type: "file" } });
+  const mod: any = await import("../public/index.html", { with: { type: "file" } });
   embeddedIndex = mod.default ?? null;
 } catch {
   embeddedIndex = null;
