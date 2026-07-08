@@ -32,7 +32,22 @@ tests.
 - [Bun](https://bun.sh) ≥ 1.3 (`curl -fsSL https://bun.sh/install | bash`)
 - Node is only needed to run the example Bolt bot (Bolt targets Node).
 
+## Install
+
+The fastest way to just run it, no Bun/clone needed:
+
+```bash
+brew tap parvalabs/tools
+brew install local-slack
+local-slack --config config.yaml --open
+```
+
+See [Single-file binary](#single-file-binary) below for standalone downloads (macOS/Linux/Windows)
+if you'd rather not use Homebrew.
+
 ## Quick start
+
+For development (editing local-slack itself):
 
 ```bash
 bun install
@@ -211,6 +226,10 @@ curl localhost:3000/_control/log   # assert on what the bot received / sent
 
 ## Single-file binary
 
+Pre-built binaries for every release are on the
+[Releases page](https://github.com/parvalabs/local-slack/releases) (or install via
+[Homebrew](#install)). This section is about building one yourself:
+
 ```bash
 bun run build:binary   # builds the UI, inlines it, and compiles a standalone executable
 ./local-slack --config examples/config.yaml
@@ -226,18 +245,37 @@ bun run build:binaries   # builds for every platform below into dist-bin/
 ```
 
 Cross-compiles via Bun's `--target` (see [`server/scripts/build-binaries.ts`](server/scripts/build-binaries.ts)),
-downloading each target toolchain on first use:
+downloading each target toolchain on first use, ad-hoc code-signs the macOS outputs, and packages
+everything as an archive (tar/zip preserve the executable bit — a raw binary uploaded to e.g. a
+GitHub release loses it):
 
-| Binary | Platform |
+| Archive | Platform |
 | --- | --- |
-| `local-slack-darwin-arm64` | macOS, Apple Silicon |
-| `local-slack-darwin-x64` | macOS, Intel |
-| `local-slack-linux-x64` | Linux, x64 |
-| `local-slack-linux-arm64` | Linux, ARM64 |
-| `local-slack-windows-x64.exe` | Windows, x64 |
+| `local-slack-darwin-arm64.tar.gz` | macOS, Apple Silicon |
+| `local-slack-darwin-x64.tar.gz` | macOS, Intel |
+| `local-slack-linux-x64.tar.gz` | Linux, x64 |
+| `local-slack-linux-arm64.tar.gz` | Linux, ARM64 |
+| `local-slack-windows-x64.zip` | Windows, x64 |
 
-To build just one, pass its target to the script directly: `bun scripts/build-binaries.ts bun-darwin-arm64`
-(run from `server/`).
+Each contains a single `local-slack`/`local-slack.exe`. To build just one, pass its target to the
+script directly: `bun scripts/build-binaries.ts bun-darwin-arm64` (run from `server/`).
+
+#### macOS: Gatekeeper
+
+These binaries aren't notarized (that needs a paid Apple Developer account) — ad-hoc signing avoids
+an outright "is damaged" refusal for a locally-built or `curl`-downloaded binary, but a **browser
+download** gets an extra `com.apple.quarantine` tag that Gatekeeper still rejects even when signed.
+Two ways around it:
+
+```bash
+# Recommended: curl never sets the quarantine flag, so this just works.
+curl -L -o local-slack.tar.gz https://github.com/parvalabs/local-slack/releases/download/v0.1.0/local-slack-darwin-arm64.tar.gz
+tar xzf local-slack.tar.gz
+./local-slack --config config.yaml
+
+# If you downloaded via the browser instead, clear the quarantine flag it added:
+xattr -d com.apple.quarantine local-slack
+```
 
 ## Publishing / running via bunx or npx
 
