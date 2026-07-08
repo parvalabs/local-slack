@@ -1,0 +1,20 @@
+{
+  "name": "local-slack",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots.",
+  "workspaces": [
+    "server",
+    "web",
+    "examples/echo-bot"
+  ],
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "dev:server": "cd server && bun --watch src/cli.ts --config ../examples/config.yaml --port 3000",
+    "dev:web": "cd web && bun run dev",
+    "build:web": "cd web && bun run build",
+    "build:binary": "bun run build:web && cd server && bun build --compile --minify src/cli.ts --outfile ../local-slack",
+    "start": "cd server && bun src/cli.ts --config ../examples/config.yaml --port 3000"
+  }
+}

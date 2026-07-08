@@ -1,0 +1,23 @@
+# Same workspace as config.yaml, but events (HTTP) delivery instead of Socket Mode.
+workspace:
+  name: Test Workspace
+  domain: test-workspace
+  teamId: T01TEST
+
+app:
+  appId: A01APP
+  botUserId: U0BOT
+  botName: testbot
+  botToken: xoxb-test-token
+  appToken: xapp-test-token
+  signingSecret: test-signing-secret
+  mode: events
+  requestUrl: http://localhost:4000/slack/events
+
+users:
+  - { id: U01ALICE, name: alice, real_name: Alice Anderson }
+  - { id: U02BOB, name: bob, real_name: Bob Brown }
+
+channels:
+  - { id: C01GEN, name: general, members: [U01ALICE, U02BOB, U0BOT] }
+  - { id: C02RND, name: random, members: [U01ALICE, U0BOT] }
