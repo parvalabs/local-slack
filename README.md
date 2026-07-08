@@ -217,6 +217,26 @@ bun run build:binary   # builds the UI, inlines it, and compiles a standalone ex
 Produces `./local-slack` — a standalone binary (no Bun/Node needed on the target) with the web UI
 embedded.
 
+### Cross-platform builds
+
+```bash
+bun run build:binaries   # builds for every platform below into dist-bin/
+```
+
+Cross-compiles via Bun's `--target` (see [`server/scripts/build-binaries.ts`](server/scripts/build-binaries.ts)),
+downloading each target toolchain on first use:
+
+| Binary | Platform |
+| --- | --- |
+| `local-slack-darwin-arm64` | macOS, Apple Silicon |
+| `local-slack-darwin-x64` | macOS, Intel |
+| `local-slack-linux-x64` | Linux, x64 |
+| `local-slack-linux-arm64` | Linux, ARM64 |
+| `local-slack-windows-x64.exe` | Windows, x64 |
+
+To build just one, pass its target to the script directly: `bun scripts/build-binaries.ts bun-darwin-arm64`
+(run from `server/`).
+
 ## Publishing / running via bunx or npx
 
 The publishable package lives in [`server/`](server) and is named `local-slack` — that's the

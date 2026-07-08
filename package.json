@@ -21,6 +21,7 @@
     "dev:web": "cd web && bun run dev",
     "build:web": "cd web && bun run build && cd ../server && bun scripts/copy-ui.ts",
     "build:binary": "bun run build:web && cd server && bun build --compile --minify src/cli.ts --outfile ../local-slack",
+    "build:binaries": "bun run build:web && cd server && bun scripts/build-binaries.ts",
     "start": "cd server && bun src/cli.ts --config ../examples/config.yaml --port 3000",
     "test": "cd server && bun test"
   }
