@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots.",
+  "license": "MIT",
   "workspaces": [
     "server",
     "web",

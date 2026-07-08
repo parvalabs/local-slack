@@ -1,5 +1,7 @@
 # local-slack
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A **local, throwaway Slack** for developing and testing Slack apps/bots — not a Slack
 replacement. Your bot connects to it exactly as it would to real Slack (Web API + Socket Mode +
 Events API), and a Slack-like **web UI** lets a human "act as" a workspace user and watch the
@@ -234,8 +236,7 @@ cd server && bun pm pack   # writes local-slack-<version>.tgz; inspect/extract i
 Note `npx`/`bunx` both just exec the `bin` entry, whose shebang is `#!/usr/bin/env bun` — Bun must
 be installed wherever it runs, same as everywhere else in this project.
 
-Before actually publishing, you'll want to add a `license` field (none is set yet — that's a real
-choice for you to make) and a `repository` URL once this has a real remote.
+Before actually publishing, you'll want to add a `repository` URL once this has a real remote.
 
 ## Architecture
 
