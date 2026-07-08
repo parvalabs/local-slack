@@ -31,7 +31,8 @@ channels:
     const config = await loadConfig(path);
     expect(config.workspace.name).toBe("My Workspace");
     expect(config.workspace.teamId).toBe("T01TEST"); // default
-    expect(config.app.botUserId).toBe("U0BOT"); // default
+    expect(config.apps).toHaveLength(1);
+    expect(config.apps[0].botUserId).toBe("U0BOT"); // default
     expect(config.users).toHaveLength(1);
     expect(config.channels[0].members).toEqual(["U1"]);
   });
@@ -62,12 +63,50 @@ channels:
       `app:\n  mode: events\n  requestUrl: http://localhost:4000/slack/events\n`,
     );
     const config = await loadConfig(path);
-    expect(config.app.mode).toBe("events");
-    expect(config.app.requestUrl).toBe("http://localhost:4000/slack/events");
+    expect(config.apps[0].mode).toBe("events");
+    expect(config.apps[0].requestUrl).toBe("http://localhost:4000/slack/events");
   });
 
   test("rejects malformed data (wrong types)", async () => {
     const path = await writeTmp("malformed.yaml", `users:\n  - { id: 123, name: alice }\n`);
     await expect(loadConfig(path)).rejects.toThrow(/Invalid config/);
+  });
+
+  test("accepts multiple apps declared under `apps:`, each with independent settings", async () => {
+    const path = await writeTmp(
+      "multi-app.yaml",
+      `
+apps:
+  - { appId: A1, botUserId: U1BOT, botToken: xoxb-one, mode: socket }
+  - { appId: A2, botUserId: U2BOT, botToken: xoxb-two, mode: events, requestUrl: http://localhost:4001/events }
+`,
+    );
+    const config = await loadConfig(path);
+    expect(config.apps).toHaveLength(2);
+    expect(config.apps.map((a) => a.appId)).toEqual(["A1", "A2"]);
+    expect(config.apps[1].requestUrl).toBe("http://localhost:4001/events");
+  });
+
+  test("rejects duplicate appId across apps", async () => {
+    const path = await writeTmp(
+      "dup-appid.yaml",
+      `apps:\n  - { appId: A1, botUserId: U1BOT, botToken: t1 }\n  - { appId: A1, botUserId: U2BOT, botToken: t2 }\n`,
+    );
+    await expect(loadConfig(path)).rejects.toThrow(/appId must be unique/);
+  });
+
+  test("rejects duplicate botToken across apps", async () => {
+    const path = await writeTmp(
+      "dup-token.yaml",
+      `apps:\n  - { appId: A1, botUserId: U1BOT, botToken: same-token }\n  - { appId: A2, botUserId: U2BOT, botToken: same-token }\n`,
+    );
+    await expect(loadConfig(path)).rejects.toThrow(/botToken must be unique/);
+  });
+
+  test("a legacy singular `app:` key is normalized to a one-element `apps` array", async () => {
+    const path = await writeTmp("legacy-app.yaml", `app:\n  appId: LEGACY\n  mode: socket\n`);
+    const config = await loadConfig(path);
+    expect(config.apps).toHaveLength(1);
+    expect(config.apps[0].appId).toBe("LEGACY");
   });
 });

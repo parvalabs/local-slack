@@ -57,7 +57,7 @@ export async function startServer(opts: { config: Config; port: number }) {
   const ui = new UiGateway(store, gateway, socket, interactions);
 
   const app = new Hono();
-  app.route("/api", webApiRouter({ store, gateway, interactions }));
+  app.route("/api", webApiRouter({ store, gateway, socket, interactions }));
   app.route("/_control", controlRouter(store, gateway, interactions));
   app.route("/_hooks", hooksRouter(store, interactions));
   app.get("/*", staticHandler(UI_DIST));
@@ -79,8 +79,11 @@ export async function startServer(opts: { config: Config; port: number }) {
     },
     websocket: {
       open(ws: ServerWebSocket<SocketData>) {
-        if (ws.data.kind === "socket") socket.add(ws);
-        else ui.add(ws);
+        if (ws.data.kind === "socket") {
+          if (!socket.add(ws, ws.data.connId)) ws.close();
+        } else {
+          ui.add(ws);
+        }
       },
       message(ws: ServerWebSocket<SocketData>, message) {
         const raw = typeof message === "string" ? message : message.toString();

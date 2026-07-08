@@ -6,9 +6,11 @@ export function userLabel(users: User[], id?: string): string {
   return u?.real_name || u?.name || id;
 }
 
-export function channelLabel(channel: Channel, users: User[], botUserId?: string): string {
+/** For a DM, shows the human participant's name (excluding whichever bot(s) it's with) —
+ *  same convention Slack uses for a bot's own DM list. */
+export function channelLabel(channel: Channel, users: User[], botUserIds: string[] = []): string {
   if (channel.is_im) {
-    const other = channel.members.find((m) => m !== botUserId);
+    const other = channel.members.find((m) => !botUserIds.includes(m));
     return userLabel(users, other);
   }
   return channel.name;

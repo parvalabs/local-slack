@@ -1,25 +1,27 @@
-import type { Channel, User, Workspace } from "../types.ts";
+import type { AppInfo, Channel, User, Workspace } from "../types.ts";
 import { channelLabel } from "../util.ts";
 
-export const HOME_ID = "__home__";
+const HOME_PREFIX = "__home__:";
+export const homeId = (appId: string) => HOME_PREFIX + appId;
+export const appIdFromHomeId = (id: string) => id.slice(HOME_PREFIX.length);
+export const isHomeId = (id: string | null) => !!id && id.startsWith(HOME_PREFIX);
 
 export function Sidebar({
   workspace,
   channels,
   users,
-  botUserId,
-  botName,
+  apps,
   selectedId,
   onSelect,
 }: {
   workspace: Workspace | null;
   channels: Channel[];
   users: User[];
-  botUserId?: string;
-  botName: string;
+  apps: AppInfo[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const botUserIds = apps.map((a) => a.botUserId);
   const publicChannels = channels.filter((c) => !c.is_im);
   const dms = channels.filter((c) => c.is_im);
 
@@ -46,17 +48,21 @@ export function Sidebar({
           className={`sidebar-item ${c.id === selectedId ? "active" : ""}`}
           onClick={() => onSelect(c.id)}
         >
-          <span className="dot" /> {channelLabel(c, users, botUserId)}
+          <span className="dot" /> {channelLabel(c, users, botUserIds)}
         </button>
       ))}
 
       <div className="sidebar-section">Apps</div>
-      <button
-        className={`sidebar-item ${selectedId === HOME_ID ? "active" : ""}`}
-        onClick={() => onSelect(HOME_ID)}
-      >
-        <span className="hash">🏠</span> {botName}
-      </button>
+      {apps.map((a) => (
+        <button
+          key={a.appId}
+          className={`sidebar-item ${selectedId === homeId(a.appId) ? "active" : ""}`}
+          onClick={() => onSelect(homeId(a.appId))}
+        >
+          <span className="hash">🏠</span> {a.botName}
+          <span className={`app-dot ${a.connected ? "on" : "off"}`} title={a.connected ? "connected" : "offline"} />
+        </button>
+      ))}
     </aside>
   );
 }

@@ -1,5 +1,7 @@
 import { nextTs, type Store } from "../state/store.ts";
+import type { AppConfig } from "../config/schema.ts";
 import type { BotGateway } from "../gateway/bot.ts";
+import type { SocketManager } from "../socket/manager.ts";
 import type { SlackMessage } from "../types.ts";
 import { resolveChannelId } from "../actions.ts";
 import { botId, formatUser, formatChannel } from "./format.ts";
@@ -7,7 +9,9 @@ import type { Interactions } from "../interactions.ts";
 
 export interface MethodContext {
   store: Store;
+  app: AppConfig; // the app this call is authenticated as (resolved from its token)
   gateway: BotGateway;
+  socket: SocketManager;
   interactions: Interactions;
 }
 
@@ -39,14 +43,14 @@ function withThreadMeta(store: Store, channel: string, messages: SlackMessage[])
 }
 
 /** Build a message object for a bot-posted message (chat.postMessage / update / ephemeral). */
-function buildBotMessage(store: Store, args: Record<string, any>, ts: string, channel: string): SlackMessage {
+function buildBotMessage(app: AppConfig, args: Record<string, any>, ts: string, channel: string): SlackMessage {
   return {
     type: "message",
     ts,
     channel,
-    user: store.botUserId,
-    bot_id: botId(store),
-    app_id: store.config.app.appId,
+    user: app.botUserId,
+    bot_id: botId(app),
+    app_id: app.appId,
     username: args.username,
     text: args.text ?? "",
     ...(args.blocks ? { blocks: args.blocks } : {}),
@@ -57,19 +61,20 @@ function buildBotMessage(store: Store, args: Record<string, any>, ts: string, ch
 
 export const methods: Record<string, Handler> = {
   // ---- identity / boot ----------------------------------------------------
-  "auth.test": (_args, { store }) =>
+  "auth.test": (_args, { store, app }) =>
     ok({
       url: `http://${store.config.workspace.domain}.slack.local/`,
       team: store.config.workspace.name,
       team_id: store.config.workspace.teamId,
-      user: store.config.app.botName,
-      user_id: store.botUserId,
-      bot_id: botId(store),
+      user: app.botName,
+      user_id: app.botUserId,
+      bot_id: botId(app),
       is_enterprise_install: false,
     }),
 
-  "apps.connections.open": (_args, { store }) => {
+  "apps.connections.open": (_args, { store, app, socket }) => {
     const connId = store.newId("conn").toLowerCase();
+    socket.registerConn(connId, app.appId);
     const wsBase = store.runtime.wsBase || "ws://localhost:3000";
     return ok({ url: `${wsBase}/socket/${connId}` });
   },
@@ -83,60 +88,60 @@ export const methods: Record<string, Handler> = {
       },
     }),
 
-  "bots.info": (_args, { store }) =>
+  "bots.info": (_args, { app }) =>
     ok({
       bot: {
-        id: botId(store),
+        id: botId(app),
         deleted: false,
-        name: store.config.app.botName,
-        app_id: store.config.app.appId,
-        user_id: store.botUserId,
+        name: app.botName,
+        app_id: app.appId,
+        user_id: app.botUserId,
       },
     }),
 
   // ---- messaging ----------------------------------------------------------
-  "chat.postMessage": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "chat.postMessage": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     if (!store.channels.has(channel)) return err("channel_not_found");
     const ts = nextTs();
-    const message = buildBotMessage(store, args, ts, channel);
+    const message = buildBotMessage(app, args, ts, channel);
     store.addMessage(message);
     return ok({ channel, ts, message });
   },
 
-  "chat.update": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "chat.update": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     const patch: Partial<SlackMessage> = {
       text: args.text,
       blocks: args.blocks,
-      edited: { user: store.botUserId, ts: nextTs() },
+      edited: { user: app.botUserId, ts: nextTs() },
     };
     const updated = store.updateMessage(channel, args.ts, patch);
     if (!updated) return err("message_not_found");
     return ok({ channel, ts: args.ts, text: updated.text, message: updated });
   },
 
-  "chat.delete": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "chat.delete": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     if (!store.deleteMessage(channel, args.ts)) return err("message_not_found");
     return ok({ channel, ts: args.ts });
   },
 
-  "chat.postEphemeral": (args, { store }) => {
+  "chat.postEphemeral": (args, { store, app }) => {
     // Rendered like a normal message in the UI, tagged ephemeral + target user.
-    const channel = resolveChannelId(store, args.channel);
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     const ts = nextTs();
-    const message = buildBotMessage(store, args, ts, channel);
+    const message = buildBotMessage(app, args, ts, channel);
     message.subtype = "ephemeral";
     (message as any).ephemeral_to = args.user;
     store.addMessage(message);
     return ok({ message_ts: ts });
   },
 
-  "chat.meMessage": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "chat.meMessage": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     const ts = nextTs();
-    const message = buildBotMessage(store, { text: args.text }, ts, channel);
+    const message = buildBotMessage(app, { text: args.text }, ts, channel);
     message.subtype = "me_message";
     store.addMessage(message);
     return ok({ channel, ts });
@@ -152,14 +157,14 @@ export const methods: Record<string, Handler> = {
     return ok({ channels, response_metadata: { next_cursor: "" } });
   },
 
-  "conversations.info": (args, { store }) => {
-    const c = store.channels.get(resolveChannelId(store, args.channel));
+  "conversations.info": (args, { store, app }) => {
+    const c = store.channels.get(resolveChannelId(store, args.channel, app.botUserId));
     if (!c) return err("channel_not_found");
     return ok({ channel: formatChannel(c) });
   },
 
-  "conversations.history": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "conversations.history": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     const messages = withThreadMeta(
       store,
       channel,
@@ -170,8 +175,8 @@ export const methods: Record<string, Handler> = {
     return ok({ messages, has_more: false, response_metadata: { next_cursor: "" } });
   },
 
-  "conversations.replies": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "conversations.replies": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     const messages = withThreadMeta(
       store,
       channel,
@@ -180,16 +185,16 @@ export const methods: Record<string, Handler> = {
     return ok({ messages, has_more: false });
   },
 
-  "conversations.members": (args, { store }) => {
-    const c = store.channels.get(resolveChannelId(store, args.channel));
+  "conversations.members": (args, { store, app }) => {
+    const c = store.channels.get(resolveChannelId(store, args.channel, app.botUserId));
     if (!c) return err("channel_not_found");
     return ok({ members: c.members, response_metadata: { next_cursor: "" } });
   },
 
-  "conversations.open": (args, { store }) => {
+  "conversations.open": (args, { store, app }) => {
     const userRef: string = args.users ?? args.user ?? "";
     const userId = String(userRef).split(",")[0];
-    const channel = store.openDm(userId);
+    const channel = store.openDm(userId, app.botUserId);
     return ok({ channel: { id: channel.id } });
   },
 
@@ -217,24 +222,24 @@ export const methods: Record<string, Handler> = {
     return ok({ user: formatUser(store, u) });
   },
 
-  "users.conversations": (_args, { store }) => {
+  "users.conversations": (_args, { store, app }) => {
     const channels = [...store.channels.values()]
-      .filter((c) => c.members.includes(store.botUserId))
+      .filter((c) => c.members.includes(app.botUserId))
       .map(formatChannel);
     return ok({ channels, response_metadata: { next_cursor: "" } });
   },
 
   // ---- views (modals + App Home) -----------------------------------------
-  "views.open": (args, { store, interactions }) => {
+  "views.open": (args, { store, app, interactions }) => {
     if (!interactions.consumeTrigger(args.trigger_id)) return err("invalid_trigger_id");
-    const view = interactions.instantiateView(args.view);
+    const view = interactions.instantiateView(app, args.view);
     store.setRootView(view);
     return ok({ view });
   },
 
-  "views.push": (args, { store, interactions }) => {
+  "views.push": (args, { store, app, interactions }) => {
     if (!interactions.consumeTrigger(args.trigger_id)) return err("invalid_trigger_id");
-    const view = interactions.instantiateView(args.view, {
+    const view = interactions.instantiateView(app, args.view, {
       previous_view_id: store.modalStack.at(-1)?.id ?? null,
       root_view_id: store.modalStack[0]?.id ?? null,
     });
@@ -242,32 +247,32 @@ export const methods: Record<string, Handler> = {
     return ok({ view });
   },
 
-  "views.update": (args, { store, interactions }) => {
-    const view = interactions.instantiateView(args.view, {
+  "views.update": (args, { store, app, interactions }) => {
+    const view = interactions.instantiateView(app, args.view, {
       root_view_id: store.modalStack[0]?.id ?? null,
     });
     store.updateView(args.view_id ?? args.external_id, view);
     return ok({ view });
   },
 
-  "views.publish": (args, { store, interactions }) => {
-    const view = interactions.instantiateView(args.view);
-    store.publishHome(args.user_id, view);
+  "views.publish": (args, { app, store, interactions }) => {
+    const view = interactions.instantiateView(app, args.view);
+    store.publishHome(args.user_id, app.appId, view);
     return ok({ view });
   },
 
   // ---- reactions ----------------------------------------------------------
-  "reactions.add": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "reactions.add": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     if (!store.findMessage(channel, args.timestamp)) return err("message_not_found");
-    store.setReaction(channel, args.timestamp, args.name, store.botUserId, true);
+    store.setReaction(channel, args.timestamp, args.name, app.botUserId, true);
     return ok();
   },
 
-  "reactions.remove": (args, { store }) => {
-    const channel = resolveChannelId(store, args.channel);
+  "reactions.remove": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
     if (!store.findMessage(channel, args.timestamp)) return err("message_not_found");
-    store.setReaction(channel, args.timestamp, args.name, store.botUserId, false);
+    store.setReaction(channel, args.timestamp, args.name, app.botUserId, false);
     return ok();
   },
 };

@@ -1,14 +1,16 @@
 import { describe, test, expect } from "bun:test";
 import { webApiRouter } from "../src/web-api/router.ts";
 import { Interactions } from "../src/interactions.ts";
+import { SocketManager } from "../src/socket/manager.ts";
 import { makeStore, makeGatewayStub } from "./helpers.ts";
 import { json } from "./ws-helpers.ts";
 
-function makeApp() {
-  const store = makeStore();
+function makeApp(storeOverrides: Partial<any> = {}) {
+  const store = makeStore(storeOverrides);
   const { gateway } = makeGatewayStub();
   const interactions = new Interactions(store);
-  const app = webApiRouter({ store, gateway, interactions });
+  const socket = new SocketManager(store);
+  const app = webApiRouter({ store, gateway, socket, interactions });
   return { app, store };
 }
 
@@ -86,5 +88,34 @@ describe("webApiRouter", () => {
       headers: { Authorization: "Bearer xoxb-test-token" },
     });
     expect((await json(res)).ok).toBe(true);
+  });
+
+  test("with multiple apps configured, resolves the calling app from its own token", async () => {
+    const { app } = makeApp({
+      apps: [
+        { appId: "A1", botUserId: "U1BOT", botToken: "xoxb-one", mode: "socket" },
+        { appId: "A2", botUserId: "U2BOT", botToken: "xoxb-two", mode: "socket" },
+      ],
+    });
+
+    const asOne = await app.request("/auth.test", {
+      method: "POST",
+      headers: { Authorization: "Bearer xoxb-one" },
+    });
+    expect((await json(asOne)).user_id).toBe("U1BOT");
+
+    const asTwo = await app.request("/auth.test", {
+      method: "POST",
+      headers: { Authorization: "Bearer xoxb-two" },
+    });
+    expect((await json(asTwo)).user_id).toBe("U2BOT");
+
+    // An unrecognized token falls back to the first configured app (this mock
+    // doesn't hard-enforce auth) rather than failing the call outright.
+    const unknownToken = await app.request("/auth.test", {
+      method: "POST",
+      headers: { Authorization: "Bearer not-a-real-token" },
+    });
+    expect((await json(unknownToken)).user_id).toBe("U1BOT");
   });
 });

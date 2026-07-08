@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { startServer } from "../src/server.ts";
 import { computeSignature } from "../src/signing.ts";
 import { makeConfig } from "./helpers.ts";
-import { waitOpen, makeCollector, postControlAndAck, json } from "./ws-helpers.ts";
+import { waitOpen, makeCollector, openSocket, postControlAndAck, json } from "./ws-helpers.ts";
 
 // End-to-end tests that spin up the real Bun server (Hono + native WebSocket) and
 // drive it exactly as a bot or the web UI would — no mocked internals.
@@ -35,10 +35,7 @@ describe("Socket Mode delivery", () => {
   });
 
   test("a user message posted via the control API is delivered as a message event, and acking unblocks the call", async () => {
-    const ws = new WebSocket(`${wsBase}/socket/test-conn-1`);
-    const collector = makeCollector(ws);
-    await waitOpen(ws);
-    await collector.next(); // hello
+    const { ws, collector } = await openSocket(base);
 
     const { envelope, response } = await postControlAndAck(
       base,
@@ -65,10 +62,7 @@ describe("Socket Mode delivery", () => {
   });
 
   test("a slash command delivers a slash_commands envelope, and an inline ack payload is posted back as a message", async () => {
-    const ws = new WebSocket(`${wsBase}/socket/test-conn-2`);
-    const collector = makeCollector(ws);
-    await waitOpen(ws);
-    await collector.next(); // hello
+    const { ws, collector } = await openSocket(base);
 
     const { envelope, response } = await postControlAndAck(
       base,
@@ -93,10 +87,7 @@ describe("Socket Mode delivery", () => {
   });
 
   test("a button click delivers block_actions, and posting to its response_url adds a message", async () => {
-    const ws = new WebSocket(`${wsBase}/socket/test-conn-3`);
-    const collector = makeCollector(ws);
-    await waitOpen(ws);
-    await collector.next(); // hello
+    const { ws, collector } = await openSocket(base);
 
     const { response: postRes } = await postControlAndAck(base, ws, collector, "/message", {
       channel: "C01GEN",
@@ -143,19 +134,17 @@ describe("Socket Mode delivery", () => {
     expect(after.messages).toHaveLength(0);
   });
 
-  test("/_control/state reports the workspace, app, users and channels", async () => {
+  test("/_control/state reports the workspace, apps, users and channels", async () => {
     const state = await json(await fetch(`${base}/_control/state`));
     expect(state.workspace.teamId).toBe("T01TEST");
-    expect(state.app.mode).toBe("socket");
+    expect(state.apps).toHaveLength(1);
+    expect(state.apps[0].mode).toBe("socket");
     expect(state.users.some((u: any) => u.id === "U0BOT")).toBe(true);
     expect(state.channels.some((c: any) => c.id === "C01GEN")).toBe(true);
   });
 
   test("/_control/reaction, /edit-message and /delete-message deliver the matching bot events", async () => {
-    const ws = new WebSocket(`${wsBase}/socket/test-conn-4`);
-    const collector = makeCollector(ws);
-    await waitOpen(ws);
-    await collector.next(); // hello
+    const { ws, collector } = await openSocket(base);
 
     const { response: postRes } = await postControlAndAck(base, ws, collector, "/message", {
       channel: "C01GEN",
@@ -207,6 +196,101 @@ describe("Socket Mode delivery", () => {
     expect((await json(deleteRes)).ok).toBe(true);
 
     ws.close();
+  });
+});
+
+describe("Multi-app workspace", () => {
+  let server: Awaited<ReturnType<typeof startServer>>["server"];
+  let base: string;
+
+  beforeAll(async () => {
+    const config = makeConfig({
+      apps: [
+        { appId: "A1", botUserId: "U1BOT", botToken: "xoxb-app-one", mode: "socket" },
+        { appId: "A2", botUserId: "U2BOT", botToken: "xoxb-app-two", mode: "socket" },
+      ],
+      channels: [
+        // Both bots are members, so both should see channel events (fan-out).
+        { id: "C01GEN", name: "general", members: ["U01ALICE", "U1BOT", "U2BOT"] },
+      ],
+    });
+    const started = await startServer({ config, port: 0 });
+    server = started.server;
+    base = `http://localhost:${server.port}`;
+  });
+
+  afterAll(() => server.stop(true));
+
+  test("a human's message fans out to every app that's a member of the channel", async () => {
+    const one = await openSocket(base, "xoxb-app-one");
+    const two = await openSocket(base, "xoxb-app-two");
+
+    const fetchPromise = fetch(`${base}/_control/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "C01GEN", user: "U01ALICE", text: "hi both of you" }),
+    });
+
+    // Both apps receive their own envelope for the same event; ack both to unblock the call.
+    const envelope1 = await one.collector.next();
+    const envelope2 = await two.collector.next();
+    one.ws.send(JSON.stringify({ envelope_id: envelope1.envelope_id }));
+    two.ws.send(JSON.stringify({ envelope_id: envelope2.envelope_id }));
+
+    const res = await fetchPromise;
+    expect(res.status).toBe(200);
+    expect(envelope1.payload.event.text).toBe("hi both of you");
+    expect(envelope2.payload.event.text).toBe("hi both of you");
+    expect(envelope1.payload.api_app_id).toBe("A1");
+    expect(envelope2.payload.api_app_id).toBe("A2");
+
+    one.ws.close();
+    two.ws.close();
+  });
+
+  test("a button click is routed only to the app whose message it's attached to", async () => {
+    const one = await openSocket(base, "xoxb-app-one");
+    const two = await openSocket(base, "xoxb-app-two");
+
+    // Post a message as app A1 (via its own Web API token) with a button.
+    const postRes = await fetch(`${base}/api/chat.postMessage`, {
+      method: "POST",
+      headers: { Authorization: "Bearer xoxb-app-one", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: "C01GEN",
+        text: "pick me",
+        blocks: [{ type: "actions", elements: [{ type: "button", action_id: "go", value: "x" }] }],
+      }),
+    });
+    const { ts } = await json(postRes);
+
+    const interactFetch = fetch(`${base}/_control/interact`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: "C01GEN",
+        messageTs: ts,
+        user: "U01ALICE",
+        action: { type: "button", action_id: "go", block_id: "b1", value: "x" },
+      }),
+    });
+
+    // Only A1 (the message's owner) receives the interaction.
+    const envelope = await one.collector.next();
+    expect(envelope.payload.api_app_id).toBe("A1");
+    expect(envelope.payload.type).toBe("block_actions");
+    one.ws.send(JSON.stringify({ envelope_id: envelope.envelope_id }));
+    await interactFetch;
+
+    // A2 got nothing at all for this interaction — prove it by racing a short timeout.
+    const raced = await Promise.race([
+      two.collector.next().then(() => "message"),
+      new Promise((resolve) => setTimeout(() => resolve("timeout"), 200)),
+    ]);
+    expect(raced).toBe("timeout");
+
+    one.ws.close();
+    two.ws.close();
   });
 });
 

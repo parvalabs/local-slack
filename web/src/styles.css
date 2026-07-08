@@ -75,6 +75,24 @@ body {
 .status.bad {
   color: #ff9db3;
 }
+.app-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.app-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-left: 6px;
+}
+.app-dot.on {
+  background: #2eb67d;
+}
+.app-dot.off {
+  background: #888;
+}
 .actas select {
   background: #fff;
   border: none;

@@ -9,7 +9,6 @@ import { avatarColor, formatTime, initials, userLabel } from "../util.ts";
 export function Message({
   message,
   users,
-  botUserId,
   actingUser,
   replyCount = 0,
   lastReplyTs,
@@ -18,7 +17,6 @@ export function Message({
 }: {
   message: Msg;
   users: User[];
-  botUserId?: string;
   actingUser: string;
   replyCount?: number;
   lastReplyTs?: string;
@@ -29,7 +27,9 @@ export function Message({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.text ?? "");
 
-  const isBot = !!message.bot_id || message.user === botUserId;
+  // Every bot-authored message carries bot_id (set by chat.postMessage, the inline
+  // slash-command ack path, and the response_url hook) — no need for a botUserId prop.
+  const isBot = !!message.bot_id;
   const name = message.username || userLabel(users, message.user);
   const isMine = !isBot && message.user === actingUser;
 

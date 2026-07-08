@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { connect, openHome, postMessage, sendSlashCommand } from "./client.ts";
 import { useLocalSlack } from "./useStore.ts";
-import { Sidebar, HOME_ID } from "./components/Sidebar.tsx";
+import { Sidebar, appIdFromHomeId, isHomeId } from "./components/Sidebar.tsx";
 import { Message } from "./components/Message.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { Modal } from "./components/Modal.tsx";
@@ -14,6 +14,7 @@ export function App() {
   const state = useLocalSlack();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actingUser, setActingUser] = useState<string>("");
+  const [activeAppId, setActiveAppId] = useState<string>("");
   const [showInspector, setShowInspector] = useState(false);
   const [openThreadTs, setOpenThreadTs] = useState<string | null>(null);
 
@@ -21,9 +22,10 @@ export function App() {
     connect();
   }, []);
 
+  const botUserIds = useMemo(() => state.apps.map((a) => a.botUserId), [state.apps]);
   const humans = useMemo(
-    () => state.users.filter((u) => u.id !== state.app?.botUserId && !u.is_bot),
-    [state.users, state.app?.botUserId],
+    () => state.users.filter((u) => !u.is_bot && !botUserIds.includes(u.id)),
+    [state.users, botUserIds],
   );
 
   // Default selections once data arrives.
@@ -35,8 +37,14 @@ export function App() {
   useEffect(() => {
     if (!actingUser && humans.length) setActingUser(humans[0].id);
   }, [humans, actingUser]);
+  useEffect(() => {
+    if (!activeAppId && state.apps.length) setActiveAppId(state.apps[0].appId);
+  }, [state.apps, activeAppId]);
 
-  const isHome = selectedId === HOME_ID;
+  const isHome = isHomeId(selectedId);
+  const homeAppId = isHome ? appIdFromHomeId(selectedId!) : null;
+  const homeApp = state.apps.find((a) => a.appId === homeAppId) ?? null;
+
   const channel = state.channels.find((c) => c.id === selectedId) ?? null;
   const messages = selectedId && !isHome ? (state.messages[selectedId] ?? []) : [];
 
@@ -63,8 +71,8 @@ export function App() {
 
   // (Re)request the App Home whenever it's shown or the acting user changes.
   useEffect(() => {
-    if (isHome && actingUser) openHome(actingUser);
-  }, [isHome, actingUser]);
+    if (isHome && homeAppId && actingUser) openHome(homeAppId, actingUser);
+  }, [isHome, homeAppId, actingUser]);
 
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -77,7 +85,7 @@ export function App() {
       const sp = text.indexOf(" ");
       const command = sp === -1 ? text : text.slice(0, sp);
       const rest = sp === -1 ? "" : text.slice(sp + 1);
-      sendSlashCommand(selectedId, actingUser, command, rest);
+      sendSlashCommand(activeAppId, selectedId, actingUser, command, rest);
     } else {
       postMessage(selectedId, actingUser, text);
     }
@@ -88,17 +96,33 @@ export function App() {
       <header className="topbar">
         <div className="brand">local-slack</div>
         <div className="topbar-right">
-          <span className={`pill ${state.app?.mode === "socket" ? "pill-socket" : "pill-events"}`}>
-            {state.app?.mode ?? "…"} mode
-          </span>
-          {state.app?.mode === "socket" && (
-            <span className={`status ${state.socketConnected ? "ok" : "bad"}`}>
-              bot {state.socketConnected ? "connected" : "offline"}
+          {state.apps.map((a) => (
+            <span key={a.appId} className="app-status" title={a.appId}>
+              <span className={`pill ${a.mode === "socket" ? "pill-socket" : "pill-events"}`}>
+                {a.botName}: {a.mode}
+              </span>
+              {a.mode === "socket" && (
+                <span className={`status ${a.connected ? "ok" : "bad"}`}>
+                  {a.connected ? "connected" : "offline"}
+                </span>
+              )}
             </span>
-          )}
+          ))}
           <span className={`status ${state.connected ? "ok" : "bad"}`}>
             ui {state.connected ? "live" : "reconnecting"}
           </span>
+          {state.apps.length > 1 && (
+            <label className="actas">
+              As app{" "}
+              <select value={activeAppId} onChange={(e) => setActiveAppId(e.target.value)}>
+                {state.apps.map((a) => (
+                  <option key={a.appId} value={a.appId}>
+                    {a.botName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="actas">
             Act as{" "}
             <select value={actingUser} onChange={(e) => setActingUser(e.target.value)}>
@@ -123,8 +147,7 @@ export function App() {
           workspace={state.workspace}
           channels={state.channels}
           users={state.users}
-          botUserId={state.app?.botUserId}
-          botName={state.app?.botName ?? "app"}
+          apps={state.apps}
           selectedId={selectedId}
           onSelect={setSelectedId}
         />
@@ -132,12 +155,13 @@ export function App() {
         {isHome ? (
           <main className="main">
             <div className="channel-header">
-              <span className="channel-title">🏠 {state.app?.botName} — Home</span>
+              <span className="channel-title">🏠 {homeApp?.botName ?? "…"} — Home</span>
               <span className="channel-sub">viewing as {humans.find((u) => u.id === actingUser)?.name}</span>
             </div>
             <HomeTab
-              view={actingUser ? state.homeViews[actingUser] : undefined}
-              botName={state.app?.botName ?? "app"}
+              appId={homeAppId ?? ""}
+              view={actingUser && homeAppId ? state.homeViews[actingUser]?.[homeAppId] : undefined}
+              botName={homeApp?.botName ?? "app"}
               actingUser={actingUser}
             />
           </main>
@@ -148,7 +172,7 @@ export function App() {
                 <>
                   <span className="channel-title">
                     {channel.is_im ? "" : channel.is_private ? "🔒 " : "# "}
-                    {channelLabel(channel, state.users, state.app?.botUserId)}
+                    {channelLabel(channel, state.users, botUserIds)}
                   </span>
                   <span className="channel-sub">{channel.members.length} members</span>
                 </>
@@ -168,7 +192,6 @@ export function App() {
                     key={m.ts}
                     message={m}
                     users={state.users}
-                    botUserId={state.app?.botUserId}
                     actingUser={actingUser}
                     replyCount={replies.length}
                     lastReplyTs={replies.at(-1)?.ts}
@@ -180,7 +203,7 @@ export function App() {
 
             {channel && (
               <Composer
-                placeholder={`Message ${channel.is_im ? "" : "#"}${channelLabel(channel, state.users, state.app?.botUserId)} as ${humans.find((u) => u.id === actingUser)?.name ?? "…"} — try /echo hi`}
+                placeholder={`Message ${channel.is_im ? "" : "#"}${channelLabel(channel, state.users, botUserIds)} as ${humans.find((u) => u.id === actingUser)?.name ?? "…"} — try /echo hi`}
                 onSend={send}
               />
             )}
@@ -193,8 +216,8 @@ export function App() {
             root={openThreadRoot}
             replies={openThreadReplies}
             users={state.users}
-            botUserId={state.app?.botUserId}
             actingUser={actingUser}
+            activeAppId={activeAppId}
             onClose={() => setOpenThreadTs(null)}
           />
         )}

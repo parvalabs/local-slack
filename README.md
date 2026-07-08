@@ -20,6 +20,7 @@ tests.
 - **Slash commands** and the **App Home** tab
 - **Threads** — a docked thread pane (reply summaries on the parent message, `conversations.replies`, `reply_count`/`latest_reply` on the parent via `conversations.history`)
 - **Human-driven reactions, edit, and delete** — react from the UI (delivers `reaction_added`/`reaction_removed`), and edit/delete your own messages (delivers `message_changed`/`message_deleted`); bot messages can't be edited/deleted this way
+- **Multiple apps in one workspace** — declare several apps under `apps:`; each gets its own tokens, delivery mode, Socket Mode connection(s) and Home tab. Channel events fan out to every app that's a member; interactive components (buttons/modals) and slash commands route to the specific app that owns them
 - **Inspector** — a live view of raw traffic to/from the bot (envelopes, HTTP, acks, Web API calls)
 
 ## Requirements
@@ -98,6 +99,43 @@ channels:
   - { id: C01GEN, name: general, members: [U01ALICE, U0BOT] }
 ```
 
+### Multiple apps
+
+Replace the singular `app:` with an `apps:` list to run more than one app against the same
+workspace at once — e.g. testing bot-to-bot interaction, or exercising two separate apps together.
+Every app needs a unique `appId`, `botUserId` and `botToken`. See
+[`examples/config.multiapp.yaml`](examples/config.multiapp.yaml) (paired with
+[`examples/echo-bot`](examples/echo-bot) and [`examples/shout-bot`](examples/shout-bot)).
+
+```yaml
+apps:
+  - appId: A01APP
+    botUserId: U0BOT
+    botName: echobot
+    botToken: xoxb-echobot-token
+    appToken: xapp-echobot-token
+    mode: socket
+  - appId: A02APP
+    botUserId: U0BOT2
+    botName: shoutbot
+    botToken: xoxb-shoutbot-token
+    appToken: xapp-shoutbot-token
+    mode: socket
+channels:
+  - { id: C01GEN, name: general, members: [U01ALICE, U0BOT, U0BOT2] }
+```
+
+Routing rules (matching real Slack as closely as this mock reasonably can):
+- **Channel events** (messages, reactions, edits, deletes) fan out to every app whose bot is a
+  member of the channel.
+- **Interactive components** (buttons, modals) route to whichever app posted the message or opened
+  the view — inferred automatically, no configuration needed.
+- **Slash commands** and **opening a Home tab** target one specific app, since this mock doesn't
+  model per-command registration. The UI's "As app" selector (shown once ≥2 apps are configured)
+  picks the target for slash commands typed in the composer; `/_control/command` and
+  `/_control/open-home` accept an optional `appId` in the body (defaults to the first configured
+  app).
+
 ## Tests
 
 ```bash
@@ -124,15 +162,15 @@ Drive the workspace and inspect bot traffic without the UI (base `http://localho
 | Method | Endpoint | Body |
 | --- | --- | --- |
 | POST | `/message` | `{ channel, user, text, thread_ts? }` |
-| POST | `/command` | `{ channel, user, command, text }` |
-| POST | `/interact` | `{ channel, messageTs, user, action }` |
+| POST | `/command` | `{ channel, user, command, text, appId? }` (appId defaults to the first configured app) |
+| POST | `/interact` | `{ channel, messageTs, user, action }` (routes to the message's own app automatically) |
 | POST | `/reaction` | `{ channel, ts, user, name, present? }` (present defaults `true`) |
 | POST | `/edit-message` | `{ channel, ts, user, text }` (only the message's own author may edit) |
 | POST | `/delete-message` | `{ channel, ts, user }` (only the message's own author may delete) |
-| POST | `/open-home` | `{ user }` |
+| POST | `/open-home` | `{ user, appId? }` (appId defaults to the first configured app) |
 | POST | `/reset` | — (restore config baseline) |
 | GET | `/log` | ordered record of all bot-facing traffic |
-| GET | `/state` | workspace / users / channels |
+| GET | `/state` | workspace / apps / users / channels |
 | GET | `/messages/:channel` | messages in a channel |
 
 ```bash
@@ -161,5 +199,6 @@ embedded.
 - `web/` — React + Vite UI (sidebar, message list, composer, Block Kit renderer, modals, App Home,
   Inspector).
 - `examples/echo-bot/` — a real Bolt app used for end-to-end verification.
+- `examples/shout-bot/` — a second Bolt app, paired with `examples/config.multiapp.yaml` to verify multi-app support.
 
 Not a security boundary: tokens/signatures are validated only enough for realism. Local testing only.

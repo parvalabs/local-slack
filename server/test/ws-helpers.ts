@@ -39,6 +39,29 @@ export function makeCollector(ws: WebSocket): Collector {
 }
 
 /**
+ * Opens a real Socket Mode connection the way a bot actually would: calls
+ * apps.connections.open to mint a connId, connects to the URL it returns, and
+ * consumes the initial `hello` frame. A raw `new WebSocket(base + "/socket/x")`
+ * with a made-up id is rejected — connIds only exist once apps.connections.open
+ * has registered them against a specific app.
+ */
+export async function openSocket(
+  base: string,
+  token?: string,
+): Promise<{ ws: WebSocket; collector: Collector }> {
+  const res = await fetch(`${base}/api/apps.connections.open`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const { url } = await (res.json() as Promise<any>);
+  const ws = new WebSocket(url);
+  const collector = makeCollector(ws);
+  await waitOpen(ws);
+  await collector.next(); // hello
+  return { ws, collector };
+}
+
+/**
  * Fires a POST to the control API and, concurrently, waits for the resulting
  * Socket Mode envelope so it can be acknowledged — required because the control
  * endpoints await the bot's delivery/ack before responding. Returns both the

@@ -1,7 +1,9 @@
 import type { Store } from "./state/store.ts";
-import type { UserConfig } from "./config/schema.ts";
+import type { UserConfig, AppConfig } from "./config/schema.ts";
+import { botId } from "./web-api/format.ts";
 
 interface TriggerCtx {
+  appId: string;
   user: string;
   channel?: string;
   messageTs?: string;
@@ -9,6 +11,7 @@ interface TriggerCtx {
 }
 
 interface ResponseCtx {
+  appId: string;
   channel: string;
   user: string;
   messageTs?: string; // container message (for replace_original / delete_original)
@@ -57,7 +60,10 @@ function emptyValue(type: string): any {
 
 /**
  * Issues trigger_ids and response_urls, validates them, and builds the interaction
- * payloads (block_actions / view_submission / view_closed) the bot expects.
+ * payloads (block_actions / view_submission / view_closed) the bot expects. Every
+ * method takes the specific app the payload is for — callers resolve which app that
+ * is (from the message/view being interacted with, or an explicit choice for
+ * app-less actions like slash commands).
  */
 export class Interactions {
   private triggers = new Map<string, TriggerCtx>();
@@ -66,9 +72,9 @@ export class Interactions {
   constructor(private store: Store) {}
 
   // ---- trigger_id ---------------------------------------------------------
-  newTriggerId(ctx: Omit<TriggerCtx, "createdAt">): string {
+  newTriggerId(app: AppConfig, ctx: { user: string; channel?: string; messageTs?: string }): string {
     const id = `${rand()}.${rand()}.${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
-    this.triggers.set(id, { ...ctx, createdAt: Date.now() });
+    this.triggers.set(id, { ...ctx, appId: app.appId, createdAt: Date.now() });
     return id;
   }
 
@@ -84,9 +90,9 @@ export class Interactions {
   }
 
   // ---- response_url -------------------------------------------------------
-  newResponseUrl(ctx: ResponseCtx): string {
+  newResponseUrl(app: AppConfig, ctx: { channel: string; user: string; messageTs?: string }): string {
     const id = crypto.randomUUID();
-    this.responses.set(id, ctx);
+    this.responses.set(id, { ...ctx, appId: app.appId });
     return `${this.store.runtime.httpBase}/_hooks/response/${id}`;
   }
 
@@ -95,14 +101,14 @@ export class Interactions {
   }
 
   // ---- view instantiation -------------------------------------------------
-  instantiateView(view: any, extra: Record<string, unknown> = {}): any {
+  instantiateView(app: AppConfig, view: any, extra: Record<string, unknown> = {}): any {
     const id = this.store.newId("V");
     return {
       ...view,
       id,
       team_id: this.store.config.workspace.teamId,
-      app_id: this.store.config.app.appId,
-      bot_id: "B" + this.store.botUserId.slice(1),
+      app_id: app.appId,
+      bot_id: botId(app),
       root_view_id: id,
       previous_view_id: null,
       hash: `${Date.now()}.${rand()}`,
@@ -122,9 +128,9 @@ export class Interactions {
     };
   }
 
-  private base() {
+  private base(app: AppConfig) {
     return {
-      api_app_id: this.store.config.app.appId,
+      api_app_id: app.appId,
       token: "verification-token",
       team: {
         id: this.store.config.workspace.teamId,
@@ -134,19 +140,22 @@ export class Interactions {
     };
   }
 
-  buildBlockActions(opts: {
-    user: string;
-    channel: string;
-    message: any;
-    action: any;
-  }) {
+  buildBlockActions(
+    app: AppConfig,
+    opts: {
+      user: string;
+      channel: string;
+      message: any;
+      action: any;
+    },
+  ) {
     const { user, channel, message, action } = opts;
-    const trigger_id = this.newTriggerId({ user, channel, messageTs: message?.ts });
-    const response_url = this.newResponseUrl({ channel, user, messageTs: message?.ts });
+    const trigger_id = this.newTriggerId(app, { user, channel, messageTs: message?.ts });
+    const response_url = this.newResponseUrl(app, { channel, user, messageTs: message?.ts });
     const chan = this.store.channels.get(channel);
     return {
       type: "block_actions",
-      ...this.base(),
+      ...this.base(app),
       user: this.userObj(user),
       container: {
         type: "message",
@@ -175,20 +184,23 @@ export class Interactions {
     };
   }
 
-  buildViewSubmission(opts: { user: string; view: any; values: any }) {
+  buildViewSubmission(app: AppConfig, opts: { user: string; view: any; values: any }) {
     const values = buildStateValues(opts.view, opts.values ?? {});
     const view = { ...opts.view, state: { values } };
     return {
       type: "view_submission",
-      ...this.base(),
+      ...this.base(app),
       user: this.userObj(opts.user),
-      trigger_id: this.newTriggerId({ user: opts.user }),
+      trigger_id: this.newTriggerId(app, { user: opts.user }),
       view,
       response_urls: [],
     };
   }
 
-  buildSlashCommand(opts: { user: string; channel: string; command: string; text: string }) {
+  buildSlashCommand(
+    app: AppConfig,
+    opts: { user: string; channel: string; command: string; text: string },
+  ) {
     const u = this.store.allUsers().find((x) => x.id === opts.user);
     const chan = this.store.channels.get(opts.channel);
     return {
@@ -201,17 +213,17 @@ export class Interactions {
       user_name: u?.name ?? opts.user,
       command: opts.command,
       text: opts.text ?? "",
-      api_app_id: this.store.config.app.appId,
+      api_app_id: app.appId,
       is_enterprise_install: "false",
-      response_url: this.newResponseUrl({ channel: opts.channel, user: opts.user }),
-      trigger_id: this.newTriggerId({ user: opts.user, channel: opts.channel }),
+      response_url: this.newResponseUrl(app, { channel: opts.channel, user: opts.user }),
+      trigger_id: this.newTriggerId(app, { user: opts.user, channel: opts.channel }),
     };
   }
 
-  buildViewClosed(opts: { user: string; view: any }) {
+  buildViewClosed(app: AppConfig, opts: { user: string; view: any }) {
     return {
       type: "view_closed",
-      ...this.base(),
+      ...this.base(app),
       user: this.userObj(opts.user),
       view: opts.view,
       is_cleared: false,

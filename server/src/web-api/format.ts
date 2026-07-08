@@ -1,9 +1,9 @@
 import type { Store } from "../state/store.ts";
-import type { UserConfig, ChannelConfig } from "../config/schema.ts";
+import type { UserConfig, ChannelConfig, AppConfig } from "../config/schema.ts";
 
-/** A stable synthetic bot_id derived from the bot user id (e.g. U0BOT -> B0BOT). */
-export function botId(store: Store): string {
-  return "B" + store.botUserId.slice(1);
+/** A stable synthetic bot_id derived from an app's bot user id (e.g. U0BOT -> B0BOT). */
+export function botId(app: AppConfig): string {
+  return "B" + app.botUserId.slice(1);
 }
 
 export function formatUser(store: Store, u: UserConfig) {

@@ -11,36 +11,62 @@ interface Pending {
 }
 
 /**
- * Tracks Socket Mode WebSocket connections (the bot opens one after calling
- * apps.connections.open) and delivers envelopes to them, Slack Socket Mode style.
+ * Tracks Socket Mode WebSocket connections — one bucket per app, since each
+ * configured app opens its own connection(s) after calling apps.connections.open —
+ * and delivers envelopes to the right app's bucket, Slack Socket Mode style.
  */
 export class SocketManager {
-  private conns = new Set<ServerWebSocket<SocketData>>();
+  private connIdToApp = new Map<string, string>();
+  private connsByApp = new Map<string, Set<ServerWebSocket<SocketData>>>();
+  private wsToApp = new Map<ServerWebSocket<SocketData>, string>();
   private pending = new Map<string, Pending>();
 
   constructor(private store: Store) {}
 
-  get connected(): boolean {
-    return this.conns.size > 0;
+  /** A connId from apps.connections.open is good for exactly one connection,
+   *  matching real Socket Mode (each call mints a URL for one new connection). */
+  registerConn(connId: string, appId: string) {
+    this.connIdToApp.set(connId, appId);
   }
 
-  add(ws: ServerWebSocket<SocketData>) {
-    this.conns.add(ws);
+  connectedFor(appId: string): boolean {
+    return (this.connsByApp.get(appId)?.size ?? 0) > 0;
+  }
+
+  /** Attaches the connection to its app's bucket. Returns false for an unknown/expired
+   *  connId, in which case the caller should close the socket immediately. */
+  add(ws: ServerWebSocket<SocketData>, connId: string): boolean {
+    const appId = this.connIdToApp.get(connId);
+    if (!appId) return false;
+    this.connIdToApp.delete(connId);
+    this.wsToApp.set(ws, appId);
+
+    let set = this.connsByApp.get(appId);
+    if (!set) {
+      set = new Set();
+      this.connsByApp.set(appId, set);
+    }
+    set.add(ws);
+
     ws.send(
       JSON.stringify({
         type: "hello",
-        num_connections: this.conns.size,
-        connection_info: { app_id: this.store.config.app.appId },
+        num_connections: set.size,
+        connection_info: { app_id: appId },
         debug_info: { host: "local-slack", started: new Date().toISOString() },
       }),
     );
-    this.store.addLog("to_bot", "socket", "socket connected (hello)");
-    this.store.emit("socket_status", true);
+    this.store.addLog("to_bot", "socket", `socket connected (hello) [${appId}]`);
+    this.store.emit("socket_status", { appId, connected: true });
+    return true;
   }
 
   remove(ws: ServerWebSocket<SocketData>) {
-    this.conns.delete(ws);
-    this.store.emit("socket_status", this.connected);
+    const appId = this.wsToApp.get(ws);
+    if (!appId) return;
+    this.wsToApp.delete(ws);
+    this.connsByApp.get(appId)?.delete(ws);
+    this.store.emit("socket_status", { appId, connected: this.connectedFor(appId) });
   }
 
   /** Handle an inbound frame from the bot — acks carry an envelope_id. */
@@ -61,12 +87,17 @@ export class SocketManager {
   }
 
   /**
-   * Send an envelope to the connected bot and resolve with the ack payload
-   * (or undefined on timeout / no connection).
+   * Send an envelope to the given app's connected bot and resolve with the ack
+   * payload (or undefined on timeout / no connection for that app).
    */
-  send(type: EnvelopeType, payload: unknown): Promise<unknown> {
-    if (this.conns.size === 0) {
-      this.store.addLog("internal", "socket", `no socket connection; dropped ${type} envelope`);
+  send(appId: string, type: EnvelopeType, payload: unknown): Promise<unknown> {
+    const conns = this.connsByApp.get(appId);
+    if (!conns || conns.size === 0) {
+      this.store.addLog(
+        "internal",
+        "socket",
+        `no socket connection for ${appId}; dropped ${type} envelope`,
+      );
       return Promise.resolve(undefined);
     }
     const envelopeId = crypto.randomUUID();
@@ -77,8 +108,8 @@ export class SocketManager {
       accepts_response_payload: type !== "events_api",
     };
     const body = JSON.stringify(envelope);
-    for (const ws of this.conns) ws.send(body);
-    this.store.addLog("to_bot", type, `envelope ${type}`, payload);
+    for (const ws of conns) ws.send(body);
+    this.store.addLog("to_bot", type, `envelope ${type} [${appId}]`, payload);
 
     return new Promise((resolve) => {
       const timer = setTimeout(() => {

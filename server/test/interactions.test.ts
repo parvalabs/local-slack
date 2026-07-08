@@ -5,11 +5,13 @@ import { makeStore } from "./helpers.ts";
 describe("Interactions — trigger_id", () => {
   test("newTriggerId issues an id that consumeTrigger can resolve", () => {
     const store = makeStore();
+    const app = store.primaryApp();
     const interactions = new Interactions(store);
-    const id = interactions.newTriggerId({ user: "U01ALICE", channel: "C01GEN" });
+    const id = interactions.newTriggerId(app, { user: "U01ALICE", channel: "C01GEN" });
     const ctx = interactions.consumeTrigger(id);
     expect(ctx?.user).toBe("U01ALICE");
     expect(ctx?.channel).toBe("C01GEN");
+    expect(ctx?.appId).toBe(app.appId);
   });
 
   test("consumeTrigger returns undefined for an unknown or missing id", () => {
@@ -22,7 +24,7 @@ describe("Interactions — trigger_id", () => {
   test("a trigger_id survives a second consume within its TTL (open then push)", () => {
     const store = makeStore();
     const interactions = new Interactions(store);
-    const id = interactions.newTriggerId({ user: "U01ALICE" });
+    const id = interactions.newTriggerId(store.primaryApp(), { user: "U01ALICE" });
     expect(interactions.consumeTrigger(id)).toBeDefined();
     expect(interactions.consumeTrigger(id)).toBeDefined();
   });
@@ -31,12 +33,17 @@ describe("Interactions — trigger_id", () => {
 describe("Interactions — response_url", () => {
   test("newResponseUrl is rooted at the store's httpBase and resolves via getResponseCtx", () => {
     const store = makeStore();
+    const app = store.primaryApp();
     const interactions = new Interactions(store);
-    const url = interactions.newResponseUrl({ channel: "C01GEN", user: "U01ALICE" });
+    const url = interactions.newResponseUrl(app, { channel: "C01GEN", user: "U01ALICE" });
     expect(url.startsWith("http://localhost:3000/_hooks/response/")).toBe(true);
 
     const id = url.split("/").pop()!;
-    expect(interactions.getResponseCtx(id)).toEqual({ channel: "C01GEN", user: "U01ALICE" });
+    expect(interactions.getResponseCtx(id)).toEqual({
+      appId: app.appId,
+      channel: "C01GEN",
+      user: "U01ALICE",
+    });
   });
 
   test("getResponseCtx returns undefined for an unknown id", () => {
@@ -50,7 +57,10 @@ describe("Interactions — instantiateView", () => {
   test("stamps id/team/app/bot metadata onto the raw view", () => {
     const store = makeStore();
     const interactions = new Interactions(store);
-    const view = interactions.instantiateView({ type: "modal", title: { text: "Hi" } });
+    const view = interactions.instantiateView(store.primaryApp(), {
+      type: "modal",
+      title: { text: "Hi" },
+    });
     expect(view.id).toMatch(/^V/);
     expect(view.team_id).toBe("T01TEST");
     expect(view.app_id).toBe("A01APP");
@@ -64,7 +74,7 @@ describe("Interactions — buildBlockActions", () => {
     const store = makeStore();
     const interactions = new Interactions(store);
     const message = { ts: "1.000001", channel: "C01GEN", text: "hi" };
-    const payload = interactions.buildBlockActions({
+    const payload = interactions.buildBlockActions(store.primaryApp(), {
       user: "U01ALICE",
       channel: "C01GEN",
       message,
@@ -108,7 +118,7 @@ describe("Interactions — buildViewSubmission", () => {
     };
 
     // The user only filled in the text input; the select was never touched.
-    const payload = interactions.buildViewSubmission({
+    const payload = interactions.buildViewSubmission(store.primaryApp(), {
       user: "U01ALICE",
       view,
       values: { name_block: { name: { type: "plain_text_input", value: "Alice" } } },
@@ -136,7 +146,11 @@ describe("Interactions — buildViewSubmission", () => {
         { type: "input", block_id: "b1", element: { type: "plain_text_input", action_id: "a1" } },
       ],
     };
-    const payload = interactions.buildViewSubmission({ user: "U01ALICE", view, values: {} });
+    const payload = interactions.buildViewSubmission(store.primaryApp(), {
+      user: "U01ALICE",
+      view,
+      values: {},
+    });
     expect(Object.keys(payload.view.state.values)).toEqual(["b1"]);
   });
 });
@@ -145,7 +159,7 @@ describe("Interactions — buildSlashCommand / buildViewClosed", () => {
   test("buildSlashCommand fills in channel/user names and issues trigger_id + response_url", () => {
     const store = makeStore();
     const interactions = new Interactions(store);
-    const payload = interactions.buildSlashCommand({
+    const payload = interactions.buildSlashCommand(store.primaryApp(), {
       user: "U02BOB",
       channel: "C01GEN",
       command: "/echo",
@@ -164,9 +178,33 @@ describe("Interactions — buildSlashCommand / buildViewClosed", () => {
     const store = makeStore();
     const interactions = new Interactions(store);
     const view = { id: "V1", type: "modal" };
-    const payload = interactions.buildViewClosed({ user: "U01ALICE", view });
+    const payload = interactions.buildViewClosed(store.primaryApp(), { user: "U01ALICE", view });
     expect(payload.type).toBe("view_closed");
     expect(payload.view).toBe(view);
     expect(payload.user.id).toBe("U01ALICE");
+  });
+});
+
+describe("Interactions — multi-app routing", () => {
+  test("trigger_id and response_url remember which app they were issued for", () => {
+    const store = makeStore({
+      apps: [
+        { appId: "A1", botUserId: "U1BOT", botToken: "t1" },
+        { appId: "A2", botUserId: "U2BOT", botToken: "t2" },
+      ],
+    });
+    const [app1, app2] = store.config.apps;
+    const interactions = new Interactions(store);
+
+    const trigger = interactions.newTriggerId(app2, { user: "U01ALICE" });
+    expect(interactions.consumeTrigger(trigger)?.appId).toBe("A2");
+
+    const url = interactions.newResponseUrl(app1, { channel: "C01GEN", user: "U01ALICE" });
+    const id = url.split("/").pop()!;
+    expect(interactions.getResponseCtx(id)?.appId).toBe("A1");
+
+    const view = interactions.instantiateView(app2, { type: "modal" });
+    expect(view.app_id).toBe("A2");
+    expect(view.bot_id).toBe("B2BOT");
   });
 });

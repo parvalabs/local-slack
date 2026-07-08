@@ -11,16 +11,16 @@ export function ThreadPane({
   root,
   replies,
   users,
-  botUserId,
   actingUser,
+  activeAppId,
   onClose,
 }: {
   channelId: string;
   root: Msg;
   replies: Msg[];
   users: User[];
-  botUserId?: string;
   actingUser: string;
+  activeAppId: string;
   onClose: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -35,7 +35,7 @@ export function ThreadPane({
       const command = sp === -1 ? text : text.slice(0, sp);
       const rest = sp === -1 ? "" : text.slice(sp + 1);
       // Slash commands in a thread still deliver normally; the reply just isn't threaded.
-      sendSlashCommand(channelId, actingUser, command, rest);
+      sendSlashCommand(activeAppId, channelId, actingUser, command, rest);
     } else {
       postMessage(channelId, actingUser, text, root.ts);
     }
@@ -51,25 +51,12 @@ export function ThreadPane({
       </div>
 
       <div className="thread-body" ref={listRef}>
-        <Message
-          message={root}
-          users={users}
-          botUserId={botUserId}
-          actingUser={actingUser}
-          hideThreadAffordance
-        />
+        <Message message={root} users={users} actingUser={actingUser} hideThreadAffordance />
         <div className="thread-divider">
           {replies.length} {replies.length === 1 ? "reply" : "replies"}
         </div>
         {replies.map((r) => (
-          <Message
-            key={r.ts}
-            message={r}
-            users={users}
-            botUserId={botUserId}
-            actingUser={actingUser}
-            hideThreadAffordance
-          />
+          <Message key={r.ts} message={r} users={users} actingUser={actingUser} hideThreadAffordance />
         ))}
       </div>
 

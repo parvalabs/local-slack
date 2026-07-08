@@ -3,23 +3,21 @@ import { setUserNames } from "./blockkit/mentions.ts";
 
 export interface State {
   connected: boolean; // UI <-> server websocket
-  socketConnected: boolean; // bot's Socket Mode connection
   workspace: Workspace | null;
-  app: AppInfo | null;
+  apps: AppInfo[];
   users: User[];
   channels: Channel[];
   messages: Record<string, Message[]>;
   modalStack: any[];
   viewErrors: Record<string, string> | null;
-  homeViews: Record<string, any>;
+  homeViews: Record<string, Record<string, any>>; // userId -> appId -> view
   log: LogEntry[];
 }
 
 const initial: State = {
   connected: false,
-  socketConnected: false,
   workspace: null,
-  app: null,
+  apps: [],
   users: [],
   channels: [],
   messages: {},
@@ -67,9 +65,8 @@ function handle(msg: any) {
       const s = msg.state;
       set({
         connected: true,
-        socketConnected: s.socketConnected,
         workspace: s.workspace,
-        app: s.app,
+        apps: s.apps,
         users: s.users,
         channels: s.channels,
         messages: s.messages ?? {},
@@ -105,7 +102,9 @@ function handle(msg: any) {
       break;
     }
     case "socket_status": {
-      set({ socketConnected: msg.connected });
+      set({
+        apps: state.apps.map((a) => (a.appId === msg.appId ? { ...a, connected: msg.connected } : a)),
+      });
       break;
     }
     case "view": {
@@ -118,7 +117,8 @@ function handle(msg: any) {
       break;
     }
     case "home": {
-      set({ homeViews: { ...state.homeViews, [msg.user]: msg.view } });
+      const byApp = { ...(state.homeViews[msg.user] ?? {}), [msg.appId]: msg.view };
+      set({ homeViews: { ...state.homeViews, [msg.user]: byApp } });
       break;
     }
     case "log": {
@@ -132,8 +132,14 @@ export function postMessage(channel: string, user: string, text: string, thread_
   ws?.send(JSON.stringify({ t: "post_message", channel, user, text, thread_ts }));
 }
 
-export function sendBlockAction(channel: string, messageTs: string, user: string, action: any) {
-  ws?.send(JSON.stringify({ t: "block_action", channel, messageTs, user, action }));
+export function sendBlockAction(
+  channel: string,
+  messageTs: string,
+  user: string,
+  action: any,
+  appId?: string,
+) {
+  ws?.send(JSON.stringify({ t: "block_action", channel, messageTs, user, action, appId }));
 }
 
 export function sendViewSubmit(user: string, values: any) {
@@ -144,12 +150,18 @@ export function sendViewClose(user: string) {
   ws?.send(JSON.stringify({ t: "view_close", user }));
 }
 
-export function sendSlashCommand(channel: string, user: string, command: string, text: string) {
-  ws?.send(JSON.stringify({ t: "slash_command", channel, user, command, text }));
+export function sendSlashCommand(
+  appId: string,
+  channel: string,
+  user: string,
+  command: string,
+  text: string,
+) {
+  ws?.send(JSON.stringify({ t: "slash_command", appId, channel, user, command, text }));
 }
 
-export function openHome(user: string) {
-  ws?.send(JSON.stringify({ t: "open_home", user }));
+export function openHome(appId: string, user: string) {
+  ws?.send(JSON.stringify({ t: "open_home", appId, user }));
 }
 
 export function sendReaction(channel: string, ts: string, user: string, name: string, present: boolean) {

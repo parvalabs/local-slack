@@ -52,14 +52,22 @@ try {
 const { server } = await startServer({ config, port });
 const base = `http://localhost:${server.port}`;
 
+const appLines = config.apps
+  .map((a, i) => {
+    const last = i === config.apps.length - 1;
+    const branch = last ? "└─" : "├─";
+    const detail = a.mode === "events" ? ` (requestUrl: ${a.requestUrl})` : "";
+    return `  ${branch} ${a.appId}: ${a.mode} mode${detail}`;
+  })
+  .join("\n");
+
 console.log(`
   local-slack is running
   ├─ Web UI:        ${base}
-  ├─ Web API base:  ${base}/api/   ← set your bot's slackApiUrl to this
-  ├─ Delivery mode: ${config.app.mode}${
-    config.app.mode === "events" ? `\n  ├─ Request URL:   ${config.app.requestUrl}` : ""
-  }
-  └─ Control API:   ${base}/_control
+  ├─ Web API base:  ${base}/api/   ← set each bot's slackApiUrl to this
+  ├─ Control API:   ${base}/_control
+  └─ Apps:
+${appLines}
 `);
 
 if (args.open) {

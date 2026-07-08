@@ -20,13 +20,15 @@ export function hooksRouter(store: Store, interactions: Interactions) {
     } else if (body.replace_original && ctx.messageTs) {
       store.updateMessage(ctx.channel, ctx.messageTs, { text: body.text, blocks: body.blocks });
     } else {
+      const respondingApp = store.appById(ctx.appId) ?? store.primaryApp();
       const ephemeral = body.response_type === "ephemeral";
       store.addMessage({
         type: "message",
         ts: nextTs(),
         channel: ctx.channel,
-        user: store.botUserId,
-        bot_id: botId(store),
+        user: respondingApp.botUserId,
+        bot_id: botId(respondingApp),
+        app_id: respondingApp.appId,
         text: body.text ?? "",
         ...(body.blocks ? { blocks: body.blocks } : {}),
         ...(ephemeral ? { subtype: "ephemeral", ephemeral_to: ctx.user } : {}),

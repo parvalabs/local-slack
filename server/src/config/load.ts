@@ -8,9 +8,15 @@ export async function loadConfig(path: string): Promise<Config> {
   }
   const raw = await file.text();
   const ext = path.split(".").pop()?.toLowerCase();
-  const data = ext === "json" ? JSON.parse(raw) : parseYaml(raw);
+  const data = (ext === "json" ? JSON.parse(raw) : parseYaml(raw)) ?? {};
 
-  const parsed = ConfigSchema.safeParse(data ?? {});
+  // Back-compat: a single `app:` object normalizes to `apps: [app]`.
+  if (data.app && !data.apps) {
+    data.apps = [data.app];
+    delete data.app;
+  }
+
+  const parsed = ConfigSchema.safeParse(data);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
@@ -19,8 +25,10 @@ export async function loadConfig(path: string): Promise<Config> {
   }
 
   const config = parsed.data;
-  if (config.app.mode === "events" && !config.app.requestUrl) {
-    throw new Error('app.mode is "events" but app.requestUrl is not set.');
+  for (const app of config.apps) {
+    if (app.mode === "events" && !app.requestUrl) {
+      throw new Error(`app "${app.appId}" has mode "events" but no requestUrl is set.`);
+    }
   }
   return config;
 }

@@ -39,7 +39,7 @@ export class UiGateway {
     store.on("view", (v) => fwd("view", v as Record<string, unknown>));
     store.on("view_errors", (e) => fwd("view_errors", e as Record<string, unknown>));
     store.on("home", (h) => fwd("home", h as Record<string, unknown>));
-    store.on("socket_status", (connected) => fwd("socket_status", { connected }));
+    store.on("socket_status", (s) => fwd("socket_status", s as Record<string, unknown>));
     store.on("reset", () => this.broadcast({ t: "init", state: this.snapshot() }));
   }
 
@@ -60,19 +60,24 @@ export class UiGateway {
   private snapshot() {
     return {
       workspace: this.store.config.workspace,
-      app: {
-        appId: this.store.config.app.appId,
-        botUserId: this.store.botUserId,
-        botName: this.store.config.app.botName,
-        mode: this.store.config.app.mode,
-      },
+      apps: this.store.config.apps.map((a) => ({
+        appId: a.appId,
+        botUserId: a.botUserId,
+        botName: a.botName,
+        mode: a.mode,
+        connected: this.socket.connectedFor(a.appId),
+      })),
       users: this.store.allUsers(),
       channels: [...this.store.channels.values()],
       messages: Object.fromEntries(this.store.messages.entries()),
       modalStack: this.store.modalStack,
-      homeViews: Object.fromEntries(this.store.homeViews.entries()),
+      homeViews: Object.fromEntries(
+        [...this.store.homeViews.entries()].map(([userId, byApp]) => [
+          userId,
+          Object.fromEntries(byApp),
+        ]),
+      ),
       log: this.store.log,
-      socketConnected: this.socket.connected,
     };
   }
 
@@ -98,6 +103,7 @@ export class UiGateway {
           messageTs: msg.messageTs,
           user: msg.user,
           action: msg.action,
+          appId: msg.appId,
         });
         break;
       case "view_submit":
@@ -111,6 +117,7 @@ export class UiGateway {
         break;
       case "slash_command":
         await userSlashCommand(this.store, this.gateway, this.interactions, {
+          appId: msg.appId ?? this.store.primaryApp().appId,
           user: msg.user,
           channel: msg.channel,
           command: msg.command,
@@ -118,7 +125,10 @@ export class UiGateway {
         });
         break;
       case "open_home":
-        await openAppHome(this.store, this.gateway, { user: msg.user });
+        await openAppHome(this.store, this.gateway, {
+          appId: msg.appId ?? this.store.primaryApp().appId,
+          user: msg.user,
+        });
         break;
       case "reaction":
         await userReaction(this.store, this.gateway, {

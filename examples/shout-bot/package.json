@@ -1,0 +1,12 @@
+{
+  "name": "shout-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A second tiny Bolt app, used to verify local-slack's multi-app support.",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.2.0"
+  }
+}

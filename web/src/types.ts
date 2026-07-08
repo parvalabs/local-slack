@@ -41,6 +41,7 @@ export interface AppInfo {
   botUserId: string;
   botName: string;
   mode: "socket" | "events";
+  connected: boolean;
 }
 
 export interface Workspace {

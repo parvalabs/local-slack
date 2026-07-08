@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { Config, UserConfig, ChannelConfig } from "../config/schema.ts";
+import type { Config, UserConfig, ChannelConfig, AppConfig } from "../config/schema.ts";
 import type { LogEntry, LogDirection, SlackMessage } from "../types.ts";
 
 let tsSeq = 0;
@@ -34,7 +34,7 @@ export class Store extends EventEmitter {
   readonly users = new Map<string, UserConfig>();
   readonly channels = new Map<string, ChannelConfig>();
   readonly messages = new Map<string, SlackMessage[]>(); // channelId -> messages
-  readonly homeViews = new Map<string, any>(); // userId -> published home view (M3)
+  readonly homeViews = new Map<string, Map<string, any>>(); // userId -> appId -> published home view
   readonly log: LogEntry[] = [];
 
   /** The active modal stack (top = currently shown). Slack shows one modal stack per user;
@@ -55,13 +55,35 @@ export class Store extends EventEmitter {
     }
   }
 
-  get botUserId(): string {
-    return this.config.app.botUserId;
+  /** The first configured app — the sensible default for actions that need "a" bot
+   *  identity but no other context to pick from (DM/channel creation fallback, the
+   *  CLI banner, the UI's default "as app" selection for slash commands / Home tab). */
+  primaryApp(): AppConfig {
+    return this.config.apps[0];
   }
 
-  /** The bot's own user record (not part of config.users, synthesized from app config). */
-  botUser(): UserConfig {
-    const app = this.config.app;
+  /** @deprecated single-app leftover — prefer resolving a specific AppConfig. Kept for
+   *  the handful of call sites that only need *a* bot identity, not a specific one. */
+  get botUserId(): string {
+    return this.primaryApp().botUserId;
+  }
+
+  appById(appId: string): AppConfig | undefined {
+    return this.config.apps.find((a) => a.appId === appId);
+  }
+
+  /** Resolve the app a Bearer token belongs to (matches either its bot or app-level
+   *  token), falling back to the primary app — this mock doesn't hard-enforce auth. */
+  appByToken(token: string | undefined): AppConfig {
+    return (
+      (token && this.config.apps.find((a) => a.botToken === token || a.appToken === token)) ||
+      this.primaryApp()
+    );
+  }
+
+  /** The bot's own user record for a given app (not part of config.users, synthesized
+   *  from its app config). */
+  botUser(app: AppConfig): UserConfig {
     return {
       id: app.botUserId,
       name: app.botName,
@@ -71,9 +93,21 @@ export class Store extends EventEmitter {
     };
   }
 
-  /** All users including the bot, for users.list / the UI snapshot. */
+  allBotUsers(): UserConfig[] {
+    return this.config.apps.map((a) => this.botUser(a));
+  }
+
+  /** All users including every configured app's bot, for users.list / the UI snapshot. */
   allUsers(): UserConfig[] {
-    return [this.botUser(), ...this.users.values()];
+    return [...this.allBotUsers(), ...this.users.values()];
+  }
+
+  /** Every configured app whose bot is a member of the given channel — the set of
+   *  apps that should receive Events API traffic (messages/reactions/edits) for it. */
+  appsInChannel(channelId: string): AppConfig[] {
+    const channel = this.channels.get(channelId);
+    if (!channel) return [];
+    return this.config.apps.filter((a) => channel.members.includes(a.botUserId));
   }
 
   channelMessages(channelId: string): SlackMessage[] {
@@ -145,10 +179,10 @@ export class Store extends EventEmitter {
     return msg;
   }
 
-  /** Find or create a direct-message channel between a user and the bot. */
-  openDm(userId: string): ChannelConfig {
+  /** Find or create a direct-message channel between a user and a specific bot. */
+  openDm(userId: string, botUserId: string): ChannelConfig {
     for (const c of this.channels.values()) {
-      if (c.is_im && c.members.includes(userId) && c.members.includes(this.botUserId)) return c;
+      if (c.is_im && c.members.includes(userId) && c.members.includes(botUserId)) return c;
     }
     const channel: ChannelConfig = {
       id: shortId("D"),
@@ -158,7 +192,7 @@ export class Store extends EventEmitter {
       is_im: true,
       topic: "",
       purpose: "",
-      members: [userId, this.botUserId],
+      members: [userId, botUserId],
     };
     this.channels.set(channel.id, channel);
     this.messages.set(channel.id, []);
@@ -166,6 +200,8 @@ export class Store extends EventEmitter {
     return channel;
   }
 
+  /** New channels are visible to every configured bot — this mock doesn't model
+   *  per-channel app invites/joins. */
   createChannel(name: string, isPrivate = false): ChannelConfig {
     const channel: ChannelConfig = {
       id: shortId(isPrivate ? "G" : "C"),
@@ -175,7 +211,7 @@ export class Store extends EventEmitter {
       is_im: false,
       topic: "",
       purpose: "",
-      members: [this.botUserId],
+      members: this.config.apps.map((a) => a.botUserId),
     };
     this.channels.set(channel.id, channel);
     this.messages.set(channel.id, []);
@@ -222,9 +258,19 @@ export class Store extends EventEmitter {
     this.emitViews();
   }
 
-  publishHome(userId: string, view: any) {
-    this.homeViews.set(userId, view);
-    this.emit("home", { user: userId, view });
+  publishHome(userId: string, appId: string, view: any) {
+    let byApp = this.homeViews.get(userId);
+    if (!byApp) {
+      byApp = new Map();
+      this.homeViews.set(userId, byApp);
+    }
+    byApp.set(appId, view);
+    this.emit("home", { user: userId, appId, view });
+  }
+
+  /** All of a user's published Home views, keyed by appId — for the UI snapshot. */
+  homeViewsFor(userId: string): Record<string, any> {
+    return Object.fromEntries(this.homeViews.get(userId) ?? []);
   }
 
   /** Restore the workspace to its config baseline: clear messages, log, modals,

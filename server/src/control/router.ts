@@ -22,7 +22,7 @@ export function controlRouter(store: Store, gateway: BotGateway, interactions: I
   app.get("/state", (c) =>
     c.json({
       workspace: store.config.workspace,
-      app: { appId: store.config.app.appId, botUserId: store.botUserId, mode: store.config.app.mode },
+      apps: store.config.apps.map((a) => ({ appId: a.appId, botUserId: a.botUserId, mode: a.mode })),
       users: store.allUsers(),
       channels: [...store.channels.values()],
     }),
@@ -49,13 +49,15 @@ export function controlRouter(store: Store, gateway: BotGateway, interactions: I
     return c.json({ ok: true, message });
   });
 
-  // Simulate a slash command.
+  // Simulate a slash command. `appId` picks the target app (defaults to the first
+  // configured one) since — like real Slack — a command belongs to exactly one app.
   app.post("/command", async (c) => {
     const body: any = await c.req.json().catch(() => ({}));
     if (!body.channel || !body.user || !body.command) {
       return c.json({ ok: false, error: "channel, user and command are required" }, 400);
     }
     await userSlashCommand(store, gateway, interactions, {
+      appId: body.appId ?? store.primaryApp().appId,
       channel: body.channel,
       user: body.user,
       command: body.command,
@@ -79,11 +81,11 @@ export function controlRouter(store: Store, gateway: BotGateway, interactions: I
     return c.json({ ok: true });
   });
 
-  // Simulate opening the App Home.
+  // Simulate opening a specific app's App Home (defaults to the first configured app).
   app.post("/open-home", async (c) => {
     const body: any = await c.req.json().catch(() => ({}));
     if (!body.user) return c.json({ ok: false, error: "user is required" }, 400);
-    await openAppHome(store, gateway, { user: body.user });
+    await openAppHome(store, gateway, { appId: body.appId ?? store.primaryApp().appId, user: body.user });
     return c.json({ ok: true });
   });
 

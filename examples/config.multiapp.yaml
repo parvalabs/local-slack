@@ -1,0 +1,31 @@
+# Two apps sharing one workspace — e.g. testing bot-to-bot interaction, or two
+# separate apps that both need to be exercised against the same mock.
+workspace:
+  name: Test Workspace
+  domain: test-workspace
+  teamId: T01TEST
+
+apps:
+  - appId: A01APP
+    botUserId: U0BOT
+    botName: echobot
+    botToken: xoxb-echobot-token
+    appToken: xapp-echobot-token
+    signingSecret: echobot-secret
+    mode: socket
+  - appId: A02APP
+    botUserId: U0BOT2
+    botName: shoutbot
+    botToken: xoxb-shoutbot-token
+    appToken: xapp-shoutbot-token
+    signingSecret: shoutbot-secret
+    mode: socket
+
+users:
+  - { id: U01ALICE, name: alice, real_name: Alice Anderson }
+  - { id: U02BOB, name: bob, real_name: Bob Brown }
+
+channels:
+  # Both bots are members of #general, so both see every message posted there.
+  - { id: C01GEN, name: general, members: [U01ALICE, U02BOB, U0BOT, U0BOT2] }
+  - { id: C02RND, name: random, members: [U01ALICE, U0BOT] }

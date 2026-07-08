@@ -1,13 +1,8 @@
 import { describe, test, expect } from "bun:test";
 import { methods } from "../src/web-api/methods.ts";
-import { Interactions } from "../src/interactions.ts";
-import { makeStore, makeGatewayStub } from "./helpers.ts";
+import { makeStore, makeMethodContext } from "./helpers.ts";
 
-function ctxFor(store: ReturnType<typeof makeStore>) {
-  const { gateway } = makeGatewayStub();
-  const interactions = new Interactions(store);
-  return { store, gateway, interactions };
-}
+const ctxFor = makeMethodContext;
 
 describe("auth.test / apps.connections.open / team.info / bots.info", () => {
   test("auth.test identifies the bot", () => {
@@ -94,7 +89,7 @@ describe("chat.*", () => {
 describe("conversations.*", () => {
   test("conversations.list respects the types filter for im vs channels", () => {
     const store = makeStore();
-    store.openDm("U01ALICE");
+    store.openDm("U01ALICE", store.primaryApp().botUserId);
     const channelsOnly = methods["conversations.list"]({}, ctxFor(store));
     expect(channelsOnly.channels.every((c: any) => !c.is_im)).toBe(true);
 
@@ -188,33 +183,33 @@ describe("users.*", () => {
 describe("views.*", () => {
   test("views.open requires a valid trigger_id", () => {
     const store = makeStore();
-    const interactions = new Interactions(store);
-    const { gateway } = makeGatewayStub();
+    const ctx = ctxFor(store);
 
     const withoutTrigger = methods["views.open"](
       { trigger_id: "bogus", view: { type: "modal" } },
-      { store, gateway, interactions },
+      ctx,
     );
     expect(withoutTrigger).toEqual({ ok: false, error: "invalid_trigger_id" });
 
-    const triggerId = interactions.newTriggerId({ user: "U01ALICE" });
+    const triggerId = ctx.interactions.newTriggerId(ctx.app, { user: "U01ALICE" });
     const res = methods["views.open"](
       { trigger_id: triggerId, view: { type: "modal", title: { text: "Hi" } } },
-      { store, gateway, interactions },
+      ctx,
     );
     expect(res.ok).toBe(true);
     expect(store.modalStack).toHaveLength(1);
     expect(res.view.id).toBeTruthy();
   });
 
-  test("views.publish stores a home view for the given user", () => {
+  test("views.publish stores a home view for the given user, scoped to the publishing app", () => {
     const store = makeStore();
+    const ctx = ctxFor(store);
     const res = methods["views.publish"](
       { user_id: "U01ALICE", view: { type: "home", blocks: [] } },
-      ctxFor(store),
+      ctx,
     );
     expect(res.ok).toBe(true);
-    expect(store.homeViews.get("U01ALICE")?.type).toBe("home");
+    expect(store.homeViewsFor("U01ALICE")[ctx.app.appId]?.type).toBe("home");
   });
 });
 

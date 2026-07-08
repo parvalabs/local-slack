@@ -37,12 +37,28 @@ export const WorkspaceSchema = z.object({
   teamId: z.string().default("T01TEST"),
 });
 
-export const ConfigSchema = z.object({
-  workspace: WorkspaceSchema.default({}),
-  app: AppSchema.default({}),
-  users: z.array(UserSchema).default([]),
-  channels: z.array(ChannelSchema).default([]),
-});
+export const ConfigSchema = z
+  .object({
+    workspace: WorkspaceSchema.default({}),
+    // One workspace can host multiple apps/bots under test at once (e.g. testing bot-to-bot
+    // interaction, or two apps sharing a workspace). `config/load.ts` accepts a legacy
+    // singular `app:` key and normalizes it to `apps: [app]` before this schema ever sees it.
+    apps: z.array(AppSchema).min(1).default([{}]),
+    users: z.array(UserSchema).default([]),
+    channels: z.array(ChannelSchema).default([]),
+  })
+  .refine((c) => new Set(c.apps.map((a) => a.appId)).size === c.apps.length, {
+    message: "apps[].appId must be unique across all configured apps",
+    path: ["apps"],
+  })
+  .refine((c) => new Set(c.apps.map((a) => a.botUserId)).size === c.apps.length, {
+    message: "apps[].botUserId must be unique across all configured apps",
+    path: ["apps"],
+  })
+  .refine((c) => new Set(c.apps.map((a) => a.botToken)).size === c.apps.length, {
+    message: "apps[].botToken must be unique across all configured apps",
+    path: ["apps"],
+  });
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type UserConfig = z.infer<typeof UserSchema>;
