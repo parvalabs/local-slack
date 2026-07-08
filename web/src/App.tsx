@@ -205,6 +205,7 @@ export function App() {
               <Composer
                 placeholder={`Message ${channel.is_im ? "" : "#"}${channelLabel(channel, state.users, botUserIds)} as ${humans.find((u) => u.id === actingUser)?.name ?? "…"} — try /echo hi`}
                 onSend={send}
+                users={state.users}
               />
             )}
           </main>

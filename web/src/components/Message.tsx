@@ -4,6 +4,7 @@ import { Blocks } from "../blockkit/BlockKit.tsx";
 import { mrkdwn } from "../blockkit/mrkdwn.tsx";
 import { sendBlockAction, sendReaction, editMessage, deleteMessage } from "../client.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
+import { emojiChar } from "../blockkit/emoji.ts";
 import { avatarColor, formatTime, initials, userLabel } from "../util.ts";
 
 export function Message({
@@ -110,7 +111,7 @@ export function Message({
                 onClick={() => toggleReaction(r.name)}
                 title={`:${r.name}:`}
               >
-                :{r.name}: {r.count}
+                {emojiChar(r.name)} {r.count}
               </button>
             ))}
           </div>

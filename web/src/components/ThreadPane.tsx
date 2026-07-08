@@ -60,7 +60,7 @@ export function ThreadPane({
         ))}
       </div>
 
-      <Composer placeholder="Reply in thread…" onSend={send} />
+      <Composer placeholder="Reply in thread…" onSend={send} users={users} />
     </aside>
   );
 }

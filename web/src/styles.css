@@ -423,6 +423,7 @@ body {
 
 /* Composer */
 .composer {
+  position: relative;
   flex: 0 0 auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -452,6 +453,63 @@ body {
 .composer-send:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* @mention autocomplete */
+.mention-list {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  width: 260px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  z-index: 50;
+}
+.mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.mention-option.active {
+  background: #e8f5fb;
+}
+.mention-option-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10px;
+  flex: 0 0 auto;
+}
+.mention-option-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mention-option-handle {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 /* Block Kit */

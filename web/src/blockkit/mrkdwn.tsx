@@ -1,5 +1,6 @@
 // Very small Slack mrkdwn -> HTML renderer (bold/italic/strike/code, links, mentions).
 import { userNames } from "./mentions.ts";
+import { emojiChar } from "./emoji.ts";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -16,6 +17,8 @@ function toHtml(input: string): string {
     (_m, id) => `<span class="mention">@${userNames.get(id) ?? id}</span>`,
   );
   h = h.replace(/&lt;#([A-Z0-9]+)\|([^&]+)&gt;/g, '<span class="mention">#$2</span>');
+  // :shortcode: emoji (unrecognized names are left as literal text by emojiChar's fallback)
+  h = h.replace(/:([a-zA-Z0-9_+-]+):/g, (_m, name) => emojiChar(name));
   // bold / italic / strike / code
   h = h.replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>");
   h = h.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
