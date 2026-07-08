@@ -53,6 +53,15 @@ Post a message in the UI as a user → the bot receives it and replies. Type `bu
 interactive buttons and a modal; type `/echo hi` for a slash command; open **Apps → testbot** for
 the App Home tab.
 
+A Python (`slack_bolt`) version of the same bot lives in
+[`examples/echo-bot-py`](examples/echo-bot-py) — the mock isn't Bolt-JS-specific:
+
+```bash
+cd examples/echo-bot-py && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+SLACK_API_URL=http://localhost:3000/api/ python index.py
+```
+
 ## Point your own Bolt app at it
 
 No code changes — just configuration:
@@ -75,8 +84,24 @@ new App({
 ```
 
 `clientOptions.slackApiUrl` is passed through to both the main WebClient and the Socket Mode
-client, so `apps.connections.open` hits the mock too. For Python's `slack_bolt`, set the client
-`base_url` similarly.
+client, so `apps.connections.open` hits the mock too.
+
+For Python's `slack_bolt`, pass a `WebClient` with `base_url` set — both to the `App` and, for
+Socket Mode, explicitly to `SocketModeHandler` (its client defaults to `app.client`, which is
+authenticated with the *bot* token, not the *app-level* token Socket Mode needs):
+
+```python
+from slack_sdk import WebClient
+from slack_bolt import App
+from slack_bolt.adapter.socket_mode import SocketModeHandler
+
+API_URL = "http://localhost:3000/api/"
+app = App(client=WebClient(token="xoxb-test-token", base_url=API_URL))
+handler = SocketModeHandler(app, "xapp-test-token", web_client=WebClient(token="xapp-test-token", base_url=API_URL))
+handler.start()
+```
+
+See [`examples/echo-bot-py`](examples/echo-bot-py) for a complete, verified example.
 
 ## Configuration
 
@@ -198,7 +223,8 @@ embedded.
   UI gateway, control + hooks routers.
 - `web/` — React + Vite UI (sidebar, message list, composer, Block Kit renderer, modals, App Home,
   Inspector).
-- `examples/echo-bot/` — a real Bolt app used for end-to-end verification.
+- `examples/echo-bot/` — a real Bolt (JS) app used for end-to-end verification.
+- `examples/echo-bot-py/` — the same bot in Bolt for Python, proving the mock is SDK-agnostic.
 - `examples/shout-bot/` — a second Bolt app, paired with `examples/config.multiapp.yaml` to verify multi-app support.
 
 Not a security boundary: tokens/signatures are validated only enough for realism. Local testing only.
