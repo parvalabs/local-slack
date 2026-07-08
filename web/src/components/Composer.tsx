@@ -7,6 +7,16 @@ interface MentionQuery {
   query: string;
 }
 
+/** A confirmed mention: the [start, end) range in `text` currently displaying
+ *  "@Real Name", and the user id it should serialize to on send. Offsets are
+ *  kept in sync as the surrounding text is edited (see `applyEdit`); editing
+ *  inside the range itself drops it back to plain, uncoupled text. */
+interface MentionSpan {
+  start: number;
+  end: number;
+  id: string;
+}
+
 /** If the cursor sits right after an "@word" (word started at a line start or
  *  after whitespace), returns where that mention starts and what's typed so far. */
 function findMentionQuery(text: string, cursor: number): MentionQuery | null {
@@ -21,6 +31,46 @@ function findMentionQuery(text: string, cursor: number): MentionQuery | null {
   return null;
 }
 
+/** Diffs two strings assuming a single contiguous edit (true for normal typing,
+ *  pasting, and deleting at a cursor/selection) — the region of `oldText` that
+ *  was replaced, and what replaced it. */
+function diffEdit(oldText: string, newText: string) {
+  let start = 0;
+  const maxStart = Math.min(oldText.length, newText.length);
+  while (start < maxStart && oldText[start] === newText[start]) start++;
+  let oldEnd = oldText.length;
+  let newEnd = newText.length;
+  while (oldEnd > start && newEnd > start && oldText[oldEnd - 1] === newText[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+  return { removedStart: start, removedEnd: oldEnd, insertedLength: newEnd - start };
+}
+
+/** Shifts spans after an edit; any span the edit touched is dropped (it reverts
+ *  to plain text — editing into the middle of a mention un-mentions it). */
+function applyEdit(spans: MentionSpan[], oldText: string, newText: string): MentionSpan[] {
+  const { removedStart, removedEnd, insertedLength } = diffEdit(oldText, newText);
+  const delta = insertedLength - (removedEnd - removedStart);
+  const next: MentionSpan[] = [];
+  for (const s of spans) {
+    if (s.end <= removedStart) next.push(s);
+    else if (s.start >= removedEnd) next.push({ ...s, start: s.start + delta, end: s.end + delta });
+    // else: the edit overlapped this span — drop it.
+  }
+  return next;
+}
+
+/** Builds the raw Slack-format text (<@USER_ID> instead of the friendly name)
+ *  to actually send, from the display text and its confirmed mention spans. */
+function serialize(text: string, spans: MentionSpan[]): string {
+  let out = text;
+  for (const s of [...spans].sort((a, b) => b.start - a.start)) {
+    out = out.slice(0, s.start) + `<@${s.id}>` + out.slice(s.end);
+  }
+  return out;
+}
+
 export function Composer({
   placeholder,
   onSend,
@@ -31,6 +81,7 @@ export function Composer({
   users?: User[];
 }) {
   const [text, setText] = useState("");
+  const [spans, setSpans] = useState<MentionSpan[]>([]);
   const [mention, setMention] = useState<MentionQuery | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -44,10 +95,11 @@ export function Composer({
   }, [mention, users]);
 
   const send = () => {
-    const trimmed = text.trim();
+    const trimmed = serialize(text, spans).trim();
     if (!trimmed) return;
     onSend(trimmed);
     setText("");
+    setSpans([]);
     setMention(null);
   };
 
@@ -55,8 +107,14 @@ export function Composer({
     if (!mention) return;
     const before = text.slice(0, mention.start);
     const after = text.slice(mention.start + 1 + mention.query.length);
-    const insertion = `<@${user.id}> `;
+    const display = `@${user.real_name || user.name}`;
+    const insertion = `${display} `;
     const newText = before + insertion + after;
+
+    setSpans((prev) => [
+      ...applyEdit(prev, text, before + after), // shift/drop existing spans past the removed query
+      { start: before.length, end: before.length + display.length, id: user.id },
+    ]);
     setText(newText);
     setMention(null);
     requestAnimationFrame(() => {
@@ -68,6 +126,7 @@ export function Composer({
 
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
+    setSpans((prev) => applyEdit(prev, text, value));
     setText(value);
     setMention(findMentionQuery(value, e.target.selectionStart ?? value.length));
     setActiveIndex(0);
@@ -124,6 +183,31 @@ export function Composer({
               e.preventDefault();
               setMention(null);
               return;
+            }
+          }
+          // Backspace right after a mention deletes the whole thing in one keystroke,
+          // matching Slack's own composer, instead of nibbling the display name apart.
+          if (e.key === "Backspace" && !mention) {
+            const el = textareaRef.current;
+            const at = el?.selectionStart ?? -1;
+            if (at >= 0 && at === el?.selectionEnd) {
+              const span = spans.find((s) => s.end === at);
+              if (span) {
+                e.preventDefault();
+                const newText = text.slice(0, span.start) + text.slice(span.end);
+                setText(newText);
+                setSpans((prev) =>
+                  prev
+                    .filter((s) => s !== span)
+                    .map((s) =>
+                      s.start > span.start
+                        ? { start: s.start - (span.end - span.start), end: s.end - (span.end - span.start), id: s.id }
+                        : s,
+                    ),
+                );
+                requestAnimationFrame(() => textareaRef.current?.setSelectionRange(span.start, span.start));
+                return;
+              }
             }
           }
           if (e.key === "Enter" && !e.shiftKey) {
