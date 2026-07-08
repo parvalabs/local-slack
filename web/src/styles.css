@@ -433,13 +433,55 @@ body {
   gap: 8px;
   padding: 8px;
 }
-.composer-input {
+/* .composer-highlight sits behind the (text-transparent) textarea and does all
+ * the actual visible text rendering, so mention spans can be colored — a plain
+ * <textarea> can't style substrings itself. The two must stay pixel-identical
+ * (font, line-height, padding, border, wrapping) or the invisible caret/
+ * selection in the textarea drifts from the glyphs drawn by the overlay; the
+ * .composer-mention span therefore only ever gets color/background, never
+ * padding/margin/border, which would shift character positions.
+ */
+.composer-input-wrap {
+  position: relative;
   flex: 1 1 auto;
+  min-width: 0;
+}
+.composer-highlight,
+.composer-input {
+  margin: 0;
+  padding: 0;
   border: none;
+  font: inherit;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.composer-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--text);
+}
+.composer-mention {
+  color: #1264a3;
+  background: #e8f5fb;
+  border-radius: 3px;
+}
+.composer-input {
+  position: relative;
+  display: block;
+  width: 100%;
   outline: none;
   resize: none;
-  font: inherit;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
   max-height: 160px;
+}
+.composer-input::placeholder {
+  color: #868686;
 }
 .composer-send {
   background: var(--green);
