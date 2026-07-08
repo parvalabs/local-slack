@@ -97,6 +97,13 @@ channels:
   - { id: C01GEN, name: general, members: [U01ALICE, U0BOT] }
 ```
 
+## Tests
+
+```bash
+bun run test        # unit tests (config/signing/store/interactions/Web API) + integration
+                     # tests that spin up the real server and drive it over HTTP/WebSocket
+```
+
 ## CLI
 
 ```
