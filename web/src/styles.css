@@ -485,6 +485,7 @@ body {
   color: transparent;
   caret-color: var(--text);
   max-height: 160px;
+  overflow-y: auto;
 }
 .composer-input::placeholder {
   color: #868686;

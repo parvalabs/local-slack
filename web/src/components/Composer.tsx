@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Channel, User } from "../types.ts";
 import { avatarColor, initials, userLabel } from "../util.ts";
 
@@ -122,6 +122,16 @@ export function Composer({
   const [activeIndex, setActiveIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+
+  // Grows the textarea to fit its content (capped by the CSS max-height, past
+  // which it scrolls normally) — the height reset to "auto" first is what lets
+  // it shrink back down when text is deleted, not just grow.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
 
   const matches = useMemo((): Candidate[] => {
     if (!trigger) return [];

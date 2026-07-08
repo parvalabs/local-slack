@@ -9,6 +9,15 @@
         "\"$HOME/.bun/bin/bun\" server/src/cli.ts --config examples/config.yaml --port 3000"
       ],
       "port": 3000
+    },
+    {
+      "name": "local-slack-web",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd web && \"$HOME/.bun/bin/bun\" run dev"
+      ],
+      "port": 5173
     }
   ]
 }
