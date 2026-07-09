@@ -22,8 +22,10 @@ export function Sidebar({
   onSelect: (id: string) => void;
 }) {
   const botUserIds = apps.map((a) => a.botUserId);
-  const publicChannels = channels.filter((c) => !c.is_im);
-  const dms = channels.filter((c) => c.is_im);
+  const publicChannels = channels.filter((c) => !c.is_im).sort((a, b) => a.name.localeCompare(b.name));
+  const dms = channels
+    .filter((c) => c.is_im)
+    .sort((a, b) => channelLabel(a, users, botUserIds).localeCompare(channelLabel(b, users, botUserIds)));
 
   return (
     <aside className="sidebar">
