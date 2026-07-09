@@ -192,13 +192,14 @@ bun run test        # unit tests (config/signing/store/interactions/Web API) + i
 ## CLI
 
 ```
-local-slack --config <path> [--port <n>] [--open]
+local-slack --config <path> [--port <n>] [--base-host <host>] [--open]
 ```
 
 | Flag | Description | Default |
 | --- | --- | --- |
 | `--config` | Path to the workspace config (YAML/JSON) | `config.yaml` |
 | `--port` | Port for the UI + API + WebSockets | `3000` |
+| `--base-host` | Hostname clients use to reach this server — baked into the Socket Mode `ws://` URL and interactive `response_url` callbacks. Override this when the bot runs elsewhere (a different pod/container) and can't resolve `localhost` back to this server | `localhost` |
 | `--open` | Open the web UI in the browser on start | — |
 
 ## Control API (for automated tests)

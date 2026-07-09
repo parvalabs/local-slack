@@ -22,13 +22,18 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
 const HELP = `local-slack — a local Slack mock for testing bots/apps
 
 Usage:
-  local-slack --config <path> [--port <n>] [--open]
+  local-slack --config <path> [--port <n>] [--base-host <host>] [--open]
 
 Options:
-  --config <path>   Path to the workspace config (YAML or JSON). Default: config.yaml
-  --port <n>        Port for the UI + API + WebSockets. Default: 3000
-  --open            Open the web UI in your browser on start
-  --help            Show this help
+  --config <path>      Path to the workspace config (YAML or JSON). Default: config.yaml
+  --port <n>           Port for the UI + API + WebSockets. Default: 3000
+  --base-host <host>   Hostname clients use to reach this server, e.g. for the
+                        Socket Mode ws:// URL and interactive response_url
+                        callbacks. Override this when the bot runs elsewhere
+                        (a different pod/container) and can't resolve
+                        "localhost" back to this server. Default: localhost
+  --open               Open the web UI in your browser on start
+  --help               Show this help
 `;
 
 const args = parseArgs(Bun.argv.slice(2));
@@ -40,6 +45,7 @@ if (args.help) {
 
 const configPath = typeof args.config === "string" ? args.config : "config.yaml";
 const port = Number(args.port ?? 3000);
+const baseHost = typeof args["base-host"] === "string" ? args["base-host"] : "localhost";
 
 let config;
 try {
@@ -49,8 +55,8 @@ try {
   process.exit(1);
 }
 
-const { server } = await startServer({ config, port });
-const base = `http://localhost:${server.port}`;
+const { server } = await startServer({ config, port, baseHost });
+const base = `http://${baseHost}:${server.port}`;
 
 const appLines = config.apps
   .map((a, i) => {

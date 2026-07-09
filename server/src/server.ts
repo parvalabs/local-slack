@@ -53,7 +53,7 @@ function staticHandler(distDir: string) {
   };
 }
 
-export async function startServer(opts: { config: Config; port: number }) {
+export async function startServer(opts: { config: Config; port: number; baseHost?: string }) {
   const store = new Store(opts.config);
   const socket = new SocketManager(store);
   const gateway = new BotGateway(store, socket);
@@ -101,9 +101,10 @@ export async function startServer(opts: { config: Config; port: number }) {
     },
   });
 
+  const baseHost = opts.baseHost || "localhost";
   store.runtime = {
-    httpBase: `http://localhost:${server.port}`,
-    wsBase: `ws://localhost:${server.port}`,
+    httpBase: `http://${baseHost}:${server.port}`,
+    wsBase: `ws://${baseHost}:${server.port}`,
   };
 
   return { server, store };
