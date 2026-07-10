@@ -1,15 +1,20 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { parseArgs } from "./params.ts";
 import { methods, type MethodContext } from "./methods.ts";
 
-/** Hono sub-app implementing `POST /api/:method` (the Slack Web API surface).
+/** Hono sub-app implementing the Slack Web API surface at `/api/:method`. Real
+ *  Slack accepts both POST (args in the body) and GET (args in the query
+ *  string) — some clients, e.g. Python's slack_sdk, use GET for read-only
+ *  methods — so both are handled here, or a GET falls through to the SPA's
+ *  catch-all route and the client chokes on an HTML response.
+ *
  *  Takes everything a method needs except which app is calling — that's resolved
  *  fresh per request from the caller's Bearer token, since each app authenticates
  *  with its own bot/app-level token. */
 export function webApiRouter(base: Omit<MethodContext, "app">) {
   const app = new Hono();
 
-  app.post("/:method", async (c) => {
+  const handle = async (c: Context) => {
     const method = c.req.param("method");
     const { token, args } = await parseArgs(c.req);
     base.store.addLog("from_bot", "web_api", method, args);
@@ -29,7 +34,10 @@ export function webApiRouter(base: Omit<MethodContext, "app">) {
       base.store.addLog("internal", "web_api", `${method} threw`, String(e));
       return c.json({ ok: false, error: "internal_error" });
     }
-  });
+  };
+
+  app.post("/:method", handle);
+  app.get("/:method", handle);
 
   return app;
 }
