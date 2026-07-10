@@ -243,6 +243,23 @@ describe("reactions.*", () => {
   });
 });
 
+describe("emoji.list", () => {
+  test("returns configured custom emoji as name -> URL rooted at the store's httpBase", () => {
+    const store = makeStore({ emojis: { custom_smile: "/tmp/smile.png", super_sad: "/tmp/sad.png" } });
+    const res = methods["emoji.list"]({}, ctxFor(store));
+    expect(res.ok).toBe(true);
+    expect(res.emoji).toEqual({
+      custom_smile: "http://localhost:3000/emoji/custom_smile",
+      super_sad: "http://localhost:3000/emoji/super_sad",
+    });
+  });
+
+  test("returns an empty map when no custom emoji are configured", () => {
+    const store = makeStore();
+    expect(methods["emoji.list"]({}, ctxFor(store)).emoji).toEqual({});
+  });
+});
+
 describe("unknown method", () => {
   test("returns ok:false via the router, not methods directly (see web-api router)", () => {
     expect(methods["definitely.not.a.method"]).toBeUndefined();

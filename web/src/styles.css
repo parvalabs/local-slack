@@ -360,6 +360,19 @@ body {
   color: #1264a3;
 }
 
+/* Custom emoji images — sized to sit inline with surrounding text/unicode emoji. */
+.emoji-img {
+  height: 1.2em;
+  width: 1.2em;
+  vertical-align: -0.2em;
+  object-fit: contain;
+}
+.emoji-option .emoji-img {
+  height: 20px;
+  width: 20px;
+  vertical-align: middle;
+}
+
 /* Inline message edit */
 .msg-edit {
   margin-top: 2px;

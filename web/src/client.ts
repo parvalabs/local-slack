@@ -1,6 +1,7 @@
 import type { AppInfo, Channel, LogEntry, Message, User, Workspace } from "./types.ts";
 import { setUserNames } from "./blockkit/mentions.ts";
 import { setChannelNames } from "./blockkit/channels.ts";
+import { setCustomEmojis } from "./blockkit/emoji.ts";
 
 export interface State {
   connected: boolean; // UI <-> server websocket
@@ -8,6 +9,7 @@ export interface State {
   apps: AppInfo[];
   users: User[];
   channels: Channel[];
+  emojis: Record<string, string>; // custom emoji name -> image URL
   messages: Record<string, Message[]>;
   modalStack: any[];
   viewErrors: Record<string, string> | null;
@@ -21,6 +23,7 @@ const initial: State = {
   apps: [],
   users: [],
   channels: [],
+  emojis: {},
   messages: {},
   modalStack: [],
   viewErrors: null,
@@ -44,6 +47,7 @@ function set(patch: Partial<State>) {
   state = { ...state, ...patch };
   if (patch.users) setUserNames(patch.users);
   if (patch.channels) setChannelNames(patch.channels);
+  if (patch.emojis) setCustomEmojis(patch.emojis);
   for (const l of listeners) l();
 }
 
@@ -71,6 +75,7 @@ function handle(msg: any) {
         apps: s.apps,
         users: s.users,
         channels: s.channels,
+        emojis: s.emojis ?? {},
         messages: s.messages ?? {},
         modalStack: s.modalStack ?? [],
         homeViews: s.homeViews ?? {},

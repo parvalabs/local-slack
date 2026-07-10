@@ -16,7 +16,7 @@ https://github.com/user-attachments/assets/bf549b05-0e9d-4152-9984-341c2895a656
 
 ## What it supports
 
-- **Web API** — `auth.test`, `chat.*`, `conversations.*`, `users.*`, `views.*`, `reactions.*`, `apps.connections.open`, `team.info`, `bots.info`
+- **Web API** — `auth.test`, `chat.*`, `conversations.*`, `users.*`, `views.*`, `reactions.*`, `emoji.list`, `apps.connections.open`, `team.info`, `bots.info`
 - **Two delivery modes** (per-app config switch):
   - **Socket Mode** — the bot opens a WebSocket (via `apps.connections.open` → `ws://…`)
   - **Events API (HTTP)** — signed POSTs to the bot's request URL (real `x-slack-signature`, so Bolt's verification passes)
@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/bf549b05-0e9d-4152-9984-341c2895a656
 - **Human-driven reactions, edit, and delete** — react from the UI (delivers `reaction_added`/`reaction_removed`), and edit/delete your own messages (delivers `message_changed`/`message_deleted`); bot messages can't be edited/deleted this way
 - **Multiple apps in one workspace** — declare several apps under `apps:`; each gets its own tokens, delivery mode, Socket Mode connection(s) and Home tab. Channel events fan out to every app that's a member; interactive components (buttons/modals) and slash commands route to the specific app that owns them
 - **@mention and #channel autocomplete** — type `@` or `#` in the composer to pick a user/bot or a channel; both render inline with the same blue/highlight style they'd have once sent, but insert real `<@USER_ID>` / `<#CHANNEL_ID|name>` syntax so the bot receives an actual reference, not literal text. Channel references in a rendered message are clickable and jump to that channel's tab
-- **Emoji rendering** — `:shortcode:` in message text and reaction pills render as the actual emoji character
+- **Emoji rendering** — `:shortcode:` in message text and reaction pills render as the actual emoji character; declare custom emoji in the config to render/react with your own images instead
 - **Inspector** — a live view of raw traffic to/from the bot (envelopes, HTTP, acks, Web API calls)
 
 ## Requirements
@@ -144,6 +144,21 @@ users:
 channels:
   - { id: C01GEN, name: general, members: [U01ALICE, U0BOT] }
 ```
+
+### Custom emoji
+
+Declare a name -> image mapping under `emojis:`; paths are relative to the config file:
+
+```yaml
+emojis:
+  party_parrot: party_parrot.png
+  super_sad: sad.png
+```
+
+The server validates each image exists at startup and serves it at `/emoji/<name>`. Use
+`:party_parrot:` in message text or as a reaction name — both render the actual image, and
+`emoji.list` returns each name resolved to a fetchable URL for bots that enumerate a workspace's
+custom emoji.
 
 ### Multiple apps
 

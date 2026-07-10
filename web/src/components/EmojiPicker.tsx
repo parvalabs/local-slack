@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { customEmojis } from "../blockkit/emoji.ts";
 
 // A small fixed set covers the common testing cases; the text field covers everything else.
 const COMMON: { emoji: string; name: string }[] = [
@@ -22,6 +23,11 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (name: string) => voi
           {COMMON.map((e) => (
             <button key={e.name} className="emoji-option" title={`:${e.name}:`} onClick={() => onPick(e.name)}>
               {e.emoji}
+            </button>
+          ))}
+          {[...customEmojis.entries()].map(([name, url]) => (
+            <button key={name} className="emoji-option" title={`:${name}:`} onClick={() => onPick(name)}>
+              <img className="emoji-img" src={url} alt={`:${name}:`} />
             </button>
           ))}
         </div>

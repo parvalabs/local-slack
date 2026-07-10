@@ -109,4 +109,17 @@ apps:
     expect(config.apps).toHaveLength(1);
     expect(config.apps[0].appId).toBe("LEGACY");
   });
+
+  test("resolves emoji image paths relative to the config file's directory", async () => {
+    const imgPath = await writeTmp("smile.png", "fake-image-bytes");
+    const imgName = imgPath.split("/").pop();
+    const path = await writeTmp("with-emoji.yaml", `emojis:\n  custom_smile: ${imgName}\n`);
+    const config = await loadConfig(path);
+    expect(config.emojis.custom_smile).toBe(imgPath);
+  });
+
+  test("throws when a declared emoji image file does not exist", async () => {
+    const path = await writeTmp("missing-emoji.yaml", `emojis:\n  custom_smile: does-not-exist.png\n`);
+    await expect(loadConfig(path)).rejects.toThrow(/emoji "custom_smile" image not found/);
+  });
 });

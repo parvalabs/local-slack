@@ -64,6 +64,13 @@ export async function startServer(opts: { config: Config; port: number; baseHost
   app.route("/api", webApiRouter({ store, gateway, socket, interactions }));
   app.route("/_control", controlRouter(store, gateway, interactions));
   app.route("/_hooks", hooksRouter(store, interactions));
+  app.get("/emoji/:name", async (c) => {
+    const path = store.config.emojis[c.req.param("name")];
+    if (!path) return c.notFound();
+    const file = Bun.file(path);
+    if (!(await file.exists())) return c.notFound();
+    return new Response(file);
+  });
   app.get("/*", staticHandler(UI_DIST));
 
   const server = Bun.serve<SocketData>({

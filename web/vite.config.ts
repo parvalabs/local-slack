@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:3000",
       "/_control": "http://localhost:3000",
+      "/emoji": "http://localhost:3000",
       "/ui": { target: "ws://localhost:3000", ws: true },
     },
   },

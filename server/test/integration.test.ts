@@ -418,3 +418,40 @@ describe("Events API (HTTP) delivery", () => {
     expect(payload.actions[0].action_id).toBe("do_click");
   });
 });
+
+describe("Custom emoji", () => {
+  let server: Awaited<ReturnType<typeof startServer>>["server"];
+  let base: string;
+  let imgPath: string;
+
+  beforeAll(async () => {
+    imgPath = `/tmp/local-slack-test-emoji-${Date.now()}.png`;
+    await Bun.write(imgPath, "fake-png-bytes");
+    const started = await startServer({
+      config: makeConfig({ emojis: { custom_smile: imgPath } }),
+      port: 0,
+    });
+    server = started.server;
+    base = `http://localhost:${server.port}`;
+  });
+
+  afterAll(async () => {
+    server.stop(true);
+    await Bun.file(imgPath).delete().catch(() => {});
+  });
+
+  test("emoji.list returns a fetchable URL for each configured custom emoji", async () => {
+    const res = await fetch(`${base}/api/emoji.list`);
+    const { emoji } = await json(res);
+    expect(emoji.custom_smile).toBe(`${base}/emoji/custom_smile`);
+
+    const img = await fetch(emoji.custom_smile);
+    expect(img.status).toBe(200);
+    expect(await img.text()).toBe("fake-png-bytes");
+  });
+
+  test("GET /emoji/:name 404s for an unconfigured name", async () => {
+    const res = await fetch(`${base}/emoji/does_not_exist`);
+    expect(res.status).toBe(404);
+  });
+});

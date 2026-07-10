@@ -69,6 +69,9 @@ export class UiGateway {
       })),
       users: this.store.allUsers(),
       channels: [...this.store.channels.values()],
+      // Same-origin relative URLs — the browser doesn't need --base-host's
+      // externally-reachable host, unlike the emoji.list Web API response.
+      emojis: Object.fromEntries(Object.keys(this.store.config.emojis).map((name) => [name, `/emoji/${name}`])),
       messages: Object.fromEntries(this.store.messages.entries()),
       modalStack: this.store.modalStack,
       homeViews: Object.fromEntries(

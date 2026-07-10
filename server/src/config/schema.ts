@@ -46,6 +46,9 @@ export const ConfigSchema = z
     apps: z.array(AppSchema).min(1).default([{}]),
     users: z.array(UserSchema).default([]),
     channels: z.array(ChannelSchema).default([]),
+    // Custom emoji name -> image path (resolved relative to the config file's
+    // directory by config/load.ts, which also rewrites this to an absolute path).
+    emojis: z.record(z.string(), z.string()).default({}),
   })
   .refine((c) => new Set(c.apps.map((a) => a.appId)).size === c.apps.length, {
     message: "apps[].appId must be unique across all configured apps",

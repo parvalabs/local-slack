@@ -15,7 +15,8 @@ export function webApiRouter(base: Omit<MethodContext, "app">) {
   const app = new Hono();
 
   const handle = async (c: Context) => {
-    const method = c.req.param("method");
+    // Non-null: both registrations below match "/:method", so this param always exists.
+    const method = c.req.param("method")!;
     const { token, args } = await parseArgs(c.req);
     base.store.addLog("from_bot", "web_api", method, args);
 

@@ -4,8 +4,18 @@ import { Blocks } from "../blockkit/BlockKit.tsx";
 import { mrkdwn } from "../blockkit/mrkdwn.tsx";
 import { sendBlockAction, sendReaction, editMessage, deleteMessage } from "../client.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
-import { emojiChar } from "../blockkit/emoji.ts";
+import { emojiChar, customEmojis } from "../blockkit/emoji.ts";
 import { avatarColor, formatTime, initials, userLabel } from "../util.ts";
+
+/** Renders a reaction's glyph — a config-declared custom emoji's image, or the
+ *  unicode character (mrkdwn.tsx's customEmojiImgHtml handles the same lookup
+ *  for message text, where dangerouslySetInnerHTML makes an <img> string workable
+ *  instead of needing a JSX component like this one). */
+function EmojiGlyph({ name }: { name: string }) {
+  const url = customEmojis.get(name);
+  if (url) return <img className="emoji-img" src={url} alt={`:${name}:`} title={`:${name}:`} />;
+  return <>{emojiChar(name)}</>;
+}
 
 export function Message({
   message,
@@ -111,7 +121,7 @@ export function Message({
                 onClick={() => toggleReaction(r.name)}
                 title={`:${r.name}:`}
               >
-                {emojiChar(r.name)} {r.count}
+                <EmojiGlyph name={r.name} /> {r.count}
               </button>
             ))}
           </div>

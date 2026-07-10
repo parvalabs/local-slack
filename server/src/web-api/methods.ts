@@ -275,4 +275,15 @@ export const methods: Record<string, Handler> = {
     store.setReaction(channel, args.timestamp, args.name, app.botUserId, false);
     return ok();
   },
+
+  // ---- emoji ----------------------------------------------------------
+  "emoji.list": (_args, { store }) =>
+    ok({
+      emoji: Object.fromEntries(
+        Object.keys(store.config.emojis).map((name) => [
+          name,
+          `${store.runtime.httpBase}/emoji/${encodeURIComponent(name)}`,
+        ]),
+      ),
+    }),
 };
