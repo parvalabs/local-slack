@@ -18,6 +18,7 @@ export function App() {
   const [activeAppId, setActiveAppId] = useState<string>("");
   const [showInspector, setShowInspector] = useState(false);
   const [openThreadTs, setOpenThreadTs] = useState<string | null>(null);
+  const [threadWidth, setThreadWidth] = useState(380);
 
   useEffect(() => {
     connect();
@@ -227,6 +228,8 @@ export function App() {
             channels={state.channels}
             actingUser={actingUser}
             activeAppId={activeAppId}
+            width={threadWidth}
+            onWidthChange={setThreadWidth}
             onClose={() => setOpenThreadTs(null)}
           />
         )}

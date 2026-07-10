@@ -669,13 +669,26 @@ body {
 
 /* Thread pane (docked, sibling of .main inside .body) */
 .thread-pane {
-  flex: 0 0 380px;
-  max-width: 40vw;
+  position: relative;
+  flex: 0 0 auto;
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   background: #fff;
   min-height: 0;
+}
+.thread-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.thread-resize-handle:hover {
+  background: #1264a3;
+  opacity: 0.4;
 }
 .thread-head {
   height: 49px;
