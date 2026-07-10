@@ -104,7 +104,10 @@ export function Message({
           </div>
         ) : (
           <>
-            {message.text && message.subtype !== "me_message" && (
+            {/* `text` is a fallback for notifications/screen readers when `blocks` are
+             *  present, not a second copy of the content — Slack only renders it when
+             *  there are no blocks. */}
+            {message.text && !message.blocks?.length && message.subtype !== "me_message" && (
               <div className="msg-text">{mrkdwn(message.text)}</div>
             )}
             {message.subtype === "me_message" && <div className="msg-text me">{mrkdwn(message.text)}</div>}

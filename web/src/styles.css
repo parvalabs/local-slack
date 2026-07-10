@@ -207,8 +207,6 @@ body {
   max-width: 720px;
 }
 .home-inner .blocks {
-  border-left: none;
-  padding-left: 0;
   max-width: none;
 }
 
@@ -581,8 +579,6 @@ body {
 /* Block Kit */
 .blocks {
   margin-top: 4px;
-  border-left: 3px solid #ddd;
-  padding-left: 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -884,8 +880,6 @@ body {
   overflow-y: auto;
 }
 .modal-body .blocks {
-  border-left: none;
-  padding-left: 0;
   max-width: none;
 }
 .modal-foot {
