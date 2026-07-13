@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { connect, openHome, postMessage, sendSlashCommand } from "./client.ts";
+import { connect, markChannelRead, openHome, postMessage, sendSlashCommand } from "./client.ts";
 import { useLocalSlack } from "./useStore.ts";
 import { Sidebar, appIdFromHomeId, isHomeId } from "./components/Sidebar.tsx";
 import { Message } from "./components/Message.tsx";
@@ -75,6 +75,25 @@ export function App() {
   useEffect(() => {
     setOpenThreadTs(null);
   }, [selectedId]);
+
+  // Mark the open channel as read - both when it's first opened, and again
+  // whenever a new message arrives while it's still the one being viewed.
+  useEffect(() => {
+    if (!selectedId || isHome) return;
+    markChannelRead(selectedId);
+  }, [selectedId, isHome, state.messages[selectedId ?? ""]]);
+
+  // Which sidebar channels have a message newer than the last one the user
+  // saw - the channel currently open is never "unread" no matter how fresh.
+  const unreadChannelIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of state.channels) {
+      if (c.id === selectedId) continue;
+      const last = state.messages[c.id]?.at(-1);
+      if (last && state.lastReadTs[c.id] !== last.ts) ids.add(c.id);
+    }
+    return ids;
+  }, [state.channels, state.messages, state.lastReadTs, selectedId]);
 
   // (Re)request the App Home whenever it's shown or the acting user changes.
   useEffect(() => {
@@ -156,6 +175,7 @@ export function App() {
           users={state.users}
           apps={state.apps}
           selectedId={selectedId}
+          unreadChannelIds={unreadChannelIds}
           onSelect={setSelectedId}
         />
 

@@ -11,6 +11,7 @@ export interface State {
   channels: Channel[];
   emojis: Record<string, string>; // custom emoji name -> image URL
   messages: Record<string, Message[]>;
+  lastReadTs: Record<string, string>; // channelId -> ts of the newest message seen, for unread bolding
   modalStack: any[];
   viewErrors: Record<string, string> | null;
   homeViews: Record<string, Record<string, any>>; // userId -> appId -> view
@@ -25,6 +26,7 @@ const initial: State = {
   channels: [],
   emojis: {},
   messages: {},
+  lastReadTs: {},
   modalStack: [],
   viewErrors: null,
   homeViews: {},
@@ -69,6 +71,14 @@ function handle(msg: any) {
   switch (msg.t) {
     case "init": {
       const s = msg.state;
+      const messages: Record<string, Message[]> = s.messages ?? {};
+      // Everything that already existed before this session opened counts as
+      // "seen" - only messages that arrive live should bold a channel.
+      const lastReadTs: Record<string, string> = {};
+      for (const [channelId, list] of Object.entries(messages)) {
+        const last = list.at(-1);
+        if (last) lastReadTs[channelId] = last.ts;
+      }
       set({
         connected: true,
         workspace: s.workspace,
@@ -76,7 +86,8 @@ function handle(msg: any) {
         users: s.users,
         channels: s.channels,
         emojis: s.emojis ?? {},
-        messages: s.messages ?? {},
+        messages,
+        lastReadTs,
         modalStack: s.modalStack ?? [],
         homeViews: s.homeViews ?? {},
         log: s.log ?? [],
@@ -133,6 +144,14 @@ function handle(msg: any) {
       break;
     }
   }
+}
+
+/** Marks a channel as read up through its newest message - call whenever it
+ *  becomes the open channel, or a new message arrives while it's already open. */
+export function markChannelRead(channelId: string) {
+  const last = state.messages[channelId]?.at(-1);
+  if (!last || state.lastReadTs[channelId] === last.ts) return;
+  set({ lastReadTs: { ...state.lastReadTs, [channelId]: last.ts } });
 }
 
 export function postMessage(channel: string, user: string, text: string, thread_ts?: string) {

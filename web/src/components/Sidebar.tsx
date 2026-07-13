@@ -12,6 +12,7 @@ export function Sidebar({
   users,
   apps,
   selectedId,
+  unreadChannelIds,
   onSelect,
 }: {
   workspace: Workspace | null;
@@ -19,6 +20,7 @@ export function Sidebar({
   users: User[];
   apps: AppInfo[];
   selectedId: string | null;
+  unreadChannelIds: Set<string>;
   onSelect: (id: string) => void;
 }) {
   const botUserIds = apps.map((a) => a.botUserId);
@@ -35,7 +37,7 @@ export function Sidebar({
       {publicChannels.map((c) => (
         <button
           key={c.id}
-          className={`sidebar-item ${c.id === selectedId ? "active" : ""}`}
+          className={`sidebar-item ${c.id === selectedId ? "active" : ""} ${unreadChannelIds.has(c.id) ? "unread" : ""}`}
           onClick={() => onSelect(c.id)}
         >
           <span className="hash">{c.is_private ? "🔒" : "#"}</span>
@@ -47,7 +49,7 @@ export function Sidebar({
       {dms.map((c) => (
         <button
           key={c.id}
-          className={`sidebar-item ${c.id === selectedId ? "active" : ""}`}
+          className={`sidebar-item ${c.id === selectedId ? "active" : ""} ${unreadChannelIds.has(c.id) ? "unread" : ""}`}
           onClick={() => onSelect(c.id)}
         >
           <span className="dot" /> {channelLabel(c, users, botUserIds)}

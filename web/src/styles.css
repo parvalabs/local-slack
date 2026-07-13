@@ -150,6 +150,10 @@ body {
   background: var(--sidebar-active);
   color: #fff;
 }
+.sidebar-item.unread {
+  color: #fff;
+  font-weight: 700;
+}
 .sidebar-item .hash {
   opacity: 0.7;
 }
