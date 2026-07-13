@@ -304,24 +304,29 @@ tar xzf local-slack.tar.gz
 xattr -d com.apple.quarantine local-slack
 ```
 
-## Publishing / running via bunx or npx
+## Publishing (npm, GitHub Releases, Homebrew)
 
-The publishable package lives in [`server/`](server) and is named `local-slack` — that's the
-package `bunx local-slack` / `npx local-slack` would install and run, independent of this
-monorepo's root package (`local-slack-workspace`, private, never published).
+`npx local-slack` doesn't run TypeScript source through Bun — it runs a prebuilt binary, same as
+the Homebrew/standalone-binary installs, so it has no Bun dependency at runtime. That's six npm
+packages under [`npm/`](npm): `local-slack-<platform>` for each of the 5 build targets (just the
+compiled binary, gated to the right machine via `os`/`cpu` fields in its `package.json`), plus a
+thin `local-slack` wrapper ([`npm/local-slack/bin.js`](npm/local-slack/bin.js)) that resolves and
+execs whichever one npm's `optionalDependencies` resolution actually installed. `server/`'s own
+`package.json` is private and is never itself published — it's the workspace's dev/build tooling,
+not the distribution artifact.
 
-It's self-contained: `server/package.json`'s `prepublishOnly` builds the web UI and stages a copy
-into `server/public/` (via [`server/scripts/copy-ui.ts`](server/scripts/copy-ui.ts)), which is
-included in the published files alongside `src/`. `npm publish` from `server/` (after `npm login`)
-runs that automatically. To sanity-check the packed contents without actually publishing:
+A release updates all three channels (npm, GitHub Releases, the Homebrew tap) together with real,
+matching version numbers:
 
 ```bash
-cd server && bun pm pack   # writes local-slack-<version>.tgz; inspect/extract it to confirm
-                            # public/index.html and src/ are both present, no web/ dependency
+bun run release:prepare 0.2.0   # bumps the version everywhere, rebuilds every binary + npm
+                                 # package, prints checksums to review
+bun run release:publish 0.2.0   # npm publish x6, git tag + GitHub release, Homebrew tap update
 ```
 
-Note `npx`/`bunx` both just exec the `bin` entry, whose shebang is `#!/usr/bin/env bun` — Bun must
-be installed wherever it runs, same as everywhere else in this project.
+See [`server/scripts/prepare-release.ts`](server/scripts/prepare-release.ts) and
+[`server/scripts/publish-release.ts`](server/scripts/publish-release.ts) for exactly what each
+step does.
 
 ## Architecture
 
