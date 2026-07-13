@@ -1,8 +1,9 @@
 {
   "name": "local-slack",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
-  "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots.",
+  "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots. Not the published package - see npm/local-slack for that.",
   "keywords": ["slack", "mock", "testing", "bolt", "socket-mode", "cli"],
   "license": "MIT",
   "repository": {
@@ -13,16 +14,11 @@
   "bin": {
     "local-slack": "./src/cli.ts"
   },
-  "files": [
-    "src",
-    "public"
-  ],
   "scripts": {
     "dev": "bun --watch src/cli.ts",
     "start": "bun src/cli.ts",
     "test": "bun test",
-    "build:binary": "bun build --compile --minify src/cli.ts --outfile ../local-slack",
-    "prepublishOnly": "cd ../web && bun install && bun run build && cd ../server && bun scripts/copy-ui.ts"
+    "build:binary": "bun build --compile --minify src/cli.ts --outfile ../local-slack"
   },
   "dependencies": {
     "hono": "^4.6.14",

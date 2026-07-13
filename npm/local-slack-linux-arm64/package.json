@@ -1,0 +1,20 @@
+{
+  "name": "local-slack-linux-arm64",
+  "version": "0.1.0",
+  "description": "local-slack prebuilt binary for Linux (arm64) - installed automatically as a dependency of the `local-slack` package, not meant to be installed directly.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parvalabs/local-slack.git",
+    "directory": "npm/local-slack-linux-arm64"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin"
+  ]
+}

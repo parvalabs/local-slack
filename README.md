@@ -36,7 +36,14 @@ https://github.com/user-attachments/assets/bf549b05-0e9d-4152-9984-341c2895a656
 
 ## Install
 
-The fastest way to just run it, no Bun/clone needed:
+No install, always the latest version, no Bun required (downloads a prebuilt binary for your
+platform on first run):
+
+```bash
+npx local-slack --config config.yaml --open
+```
+
+Or via Homebrew:
 
 ```bash
 brew tap parvalabs/tools
@@ -45,7 +52,7 @@ local-slack --config config.yaml --open
 ```
 
 See [Single-file binary](#single-file-binary) below for standalone downloads (macOS/Linux/Windows)
-if you'd rather not use Homebrew.
+if you'd rather not use npx or Homebrew.
 
 ## Quick start
 
@@ -216,6 +223,8 @@ local-slack --config <path> [--port <n>] [--base-host <host>] [--open]
 | `--port` | Port for the UI + API + WebSockets | `3000` |
 | `--base-host` | Hostname clients use to reach this server — baked into the Socket Mode `ws://` URL and interactive `response_url` callbacks. Override this when the bot runs elsewhere (a different pod/container) and can't resolve `localhost` back to this server | `localhost` |
 | `--open` | Open the web UI in the browser on start | — |
+| `-v`, `--version` | Print the version number and exit | — |
+| `-h`, `--help` | Show help and exit | — |
 
 ## Control API (for automated tests)
 

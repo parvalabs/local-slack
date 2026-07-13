@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { loadConfig } from "./config/load.ts";
 import { startServer } from "./server.ts";
+import { VERSION } from "./version.ts";
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
@@ -33,15 +34,22 @@ Options:
                         (a different pod/container) and can't resolve
                         "localhost" back to this server. Default: localhost
   --open               Open the web UI in your browser on start
-  --help               Show this help
+  -v, --version        Show the version number
+  -h, --help           Show this help
 `;
 
-const args = parseArgs(Bun.argv.slice(2));
+const argv = Bun.argv.slice(2);
 
-if (args.help) {
+if (argv.includes("-h") || argv.includes("--help")) {
   console.log(HELP);
   process.exit(0);
 }
+if (argv.includes("-v") || argv.includes("--version")) {
+  console.log(VERSION);
+  process.exit(0);
+}
+
+const args = parseArgs(argv);
 
 const configPath = typeof args.config === "string" ? args.config : "config.yaml";
 const port = Number(args.port ?? 3000);

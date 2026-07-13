@@ -1,0 +1,20 @@
+{
+  "name": "local-slack-darwin-arm64",
+  "version": "0.1.0",
+  "description": "local-slack prebuilt binary for macOS (Apple Silicon) - installed automatically as a dependency of the `local-slack` package, not meant to be installed directly.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/parvalabs/local-slack.git",
+    "directory": "npm/local-slack-darwin-arm64"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin"
+  ]
+}

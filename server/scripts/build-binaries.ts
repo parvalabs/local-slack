@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 // Cross-compiles the standalone binary for several platforms via Bun's
 // `--target=bun-<os>-<arch>` (see https://bun.com/docs/bundler/executables),
-// ad-hoc code-signs the macOS outputs, and packages everything as an archive.
+// ad-hoc code-signs the macOS outputs, and packages everything as an archive
+// *and* stages a raw copy into the matching npm/local-slack-<suffix>/bin/
+// package (see npm/local-slack/bin.js, which execs whichever one npm's
+// os/cpu-matched optionalDependencies resolution actually installed).
 //
 // Two reasons for the archive step, not just the raw binary:
 //  - GitHub Releases (like most file-transfer paths) don't preserve the Unix
@@ -15,7 +18,7 @@
 //
 // Run `bun run build:web` first so server/public/index.html exists to embed.
 import { join } from "node:path";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, copyFile, chmod } from "node:fs/promises";
 
 const TARGETS: { target: string; os: "darwin" | "linux" | "windows"; suffix: string }[] = [
   { target: "bun-darwin-arm64", os: "darwin", suffix: "darwin-arm64" },
@@ -28,6 +31,7 @@ const TARGETS: { target: string; os: "darwin" | "linux" | "windows"; suffix: str
 const root = join(import.meta.dir, "..");
 const outDir = join(root, "../dist-bin");
 const stageDir = join(outDir, ".stage");
+const npmDir = join(root, "../npm");
 await rm(stageDir, { recursive: true, force: true });
 await mkdir(stageDir, { recursive: true });
 
@@ -62,8 +66,13 @@ for (const { target, os, suffix } of TARGETS) {
     await run(["chmod", "+x", binPath], root);
     await run(["tar", "-czf", archivePath, "-C", stageDir, binName], root);
   }
+
+  const npmBinPath = join(npmDir, `local-slack-${suffix}`, "bin", binName);
+  await copyFile(binPath, npmBinPath);
+  if (os !== "windows") await chmod(npmBinPath, 0o755);
+
   await rm(binPath);
-  console.log(`  packaged ${archiveName}`);
+  console.log(`  packaged ${archiveName}, staged npm/local-slack-${suffix}/bin/${binName}`);
 }
 
 await rm(stageDir, { recursive: true, force: true });

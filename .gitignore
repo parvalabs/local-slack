@@ -5,6 +5,7 @@ dist/
 /local-slack
 /dist-bin/
 /server/public/
+/npm/local-slack-*/bin/*
 .venv/
 __pycache__/
 *.pyc
