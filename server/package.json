@@ -1,10 +1,17 @@
 {
   "name": "local-slack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots. Not the published package - see npm/local-slack for that.",
-  "keywords": ["slack", "mock", "testing", "bolt", "socket-mode", "cli"],
+  "keywords": [
+    "slack",
+    "mock",
+    "testing",
+    "bolt",
+    "socket-mode",
+    "cli"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

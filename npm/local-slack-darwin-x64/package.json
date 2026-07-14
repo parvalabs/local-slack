@@ -1,6 +1,6 @@
 {
   "name": "local-slack-darwin-x64",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "local-slack prebuilt binary for macOS (Intel) - installed automatically as a dependency of the `local-slack` package, not meant to be installed directly.",
   "license": "MIT",
   "repository": {

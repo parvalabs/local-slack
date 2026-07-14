@@ -1,6 +1,6 @@
 {
   "name": "local-slack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local Slack mock (Web API + Socket Mode + Events API) with a web UI, for testing Slack apps/bots.",
   "keywords": [
     "slack",
@@ -24,10 +24,10 @@
     "bin.js"
   ],
   "optionalDependencies": {
-    "local-slack-darwin-arm64": "0.1.0",
-    "local-slack-darwin-x64": "0.1.0",
-    "local-slack-linux-arm64": "0.1.0",
-    "local-slack-linux-x64": "0.1.0",
-    "local-slack-windows-x64": "0.1.0"
+    "local-slack-darwin-arm64": "0.1.1",
+    "local-slack-darwin-x64": "0.1.1",
+    "local-slack-linux-arm64": "0.1.1",
+    "local-slack-linux-x64": "0.1.1",
+    "local-slack-windows-x64": "0.1.1"
   }
 }
