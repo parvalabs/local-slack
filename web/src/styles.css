@@ -124,6 +124,62 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 15px;
 }
+.search-bar {
+  position: relative;
+  padding: 10px 16px 4px;
+}
+.search-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #fff;
+  font-size: 13px;
+}
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+.search-input:focus {
+  outline: none;
+  background: #fff;
+  color: var(--text);
+}
+.search-results {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 100%;
+  margin-top: 2px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  z-index: 20;
+}
+.search-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+.search-result:hover,
+.search-result.active {
+  background: #f0f0f0;
+}
+.search-result-icon {
+  width: 20px;
+  text-align: center;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
 .sidebar-section {
   color: var(--sidebar-text);
   font-size: 13px;

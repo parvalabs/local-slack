@@ -1,5 +1,6 @@
 import type { AppInfo, Channel, User, Workspace } from "../types.ts";
 import { channelLabel } from "../util.ts";
+import { SearchBar } from "./SearchBar.tsx";
 
 const HOME_PREFIX = "__home__:";
 export const homeId = (appId: string) => HOME_PREFIX + appId;
@@ -32,6 +33,8 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-header">{workspace?.name ?? "Workspace"}</div>
+
+      <SearchBar channels={channels} apps={apps} onSelect={onSelect} />
 
       <div className="sidebar-section">Channels</div>
       {publicChannels.map((c) => (
