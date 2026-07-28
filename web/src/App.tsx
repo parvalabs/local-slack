@@ -19,6 +19,8 @@ import { Inspector } from "./components/Inspector.tsx";
 import { ThreadPane } from "./components/ThreadPane.tsx";
 import { NotificationCenter, type Notification } from "./components/NotificationCenter.tsx";
 import { setChannelClickHandler } from "./blockkit/channels.ts";
+import { setArchiveClickHandler } from "./blockkit/archive.ts";
+import { parseArchivePath, type ArchiveTarget } from "./permalink.ts";
 import { channelLabel } from "./util.ts";
 
 export function App() {
@@ -29,6 +31,12 @@ export function App() {
   const [showInspector, setShowInspector] = useState(false);
   const [openThreadTs, setOpenThreadTs] = useState<string | null>(null);
   const [threadWidth, setThreadWidth] = useState(380);
+  const [highlightTs, setHighlightTs] = useState<string | null>(null);
+  // An /archives/… URL the app was opened on, held until the workspace arrives
+  // over the websocket — there are no channels to select before that.
+  const [deepLink, setDeepLink] = useState<ArchiveTarget | null>(() =>
+    parseArchivePath(location.pathname, location.search),
+  );
 
   useEffect(() => {
     connect();
@@ -45,12 +53,14 @@ export function App() {
     [state.users, botUserIds],
   );
 
-  // Default selections once data arrives.
+  // Default selections once data arrives — skipped while a deep link is pending,
+  // so it doesn't land on #general first and then jump.
   useEffect(() => {
+    if (deepLink) return;
     if (!selectedId && state.channels.length) {
       setSelectedId(state.channels.find((c) => !c.is_im)?.id ?? state.channels[0].id);
     }
-  }, [state.channels, selectedId]);
+  }, [state.channels, selectedId, deepLink]);
   useEffect(() => {
     if (!actingUser && humans.length) setActingUser(humans[0].id);
   }, [humans, actingUser]);
@@ -95,6 +105,33 @@ export function App() {
     if (!selectedId || isHome) return;
     markChannelRead(selectedId);
   }, [selectedId, isHome, state.messages[selectedId ?? ""]]);
+
+  /** Jump to a permalinked message: its channel, its thread if it was a reply,
+   *  and flag it so the list scrolls to and flashes it. */
+  const goToArchive = (target: ArchiveTarget) => {
+    if (target.channelId === selectedId) {
+      setOpenThreadTs(target.threadTs ?? null);
+    } else {
+      pendingThreadTs.current = target.threadTs ?? null;
+      setSelectedId(target.channelId);
+    }
+    setHighlightTs(target.ts ?? null);
+  };
+
+  // Re-registered every render on purpose: goToArchive closes over selectedId,
+  // and a stale closure here would navigate relative to the wrong channel.
+  useEffect(() => {
+    setArchiveClickHandler(goToArchive);
+  });
+
+  // Apply an /archives/… deep link once the workspace has loaded, then clear it
+  // from the address bar so later navigation doesn't leave a stale URL behind.
+  useEffect(() => {
+    if (!deepLink || !state.channels.length) return;
+    if (state.channels.some((c) => c.id === deepLink.channelId)) goToArchive(deepLink);
+    setDeepLink(null);
+    history.replaceState(null, "", "/");
+  }, [deepLink, state.channels]);
 
   // Which sidebar channels have a message newer than the last one the user
   // saw - the channel currently open is never "unread" no matter how fresh.
@@ -190,8 +227,23 @@ export function App() {
 
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (highlightTs) return; // a permalink is steering the scroll instead
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages.length, selectedId]);
+  }, [messages.length, selectedId, highlightTs]);
+
+  // Bring a permalinked message into view and let the flash fade. Declared after
+  // the scroll-to-bottom above so it runs second and wins on the same render.
+  useEffect(() => {
+    if (!highlightTs) return;
+    // Document-wide rather than scoped to the message list: a permalinked reply
+    // only exists in the thread pane. A root lives in both, and querySelector
+    // finds the list copy first, which is the one to scroll.
+    document
+      .querySelector(`.msg[data-ts="${CSS.escape(highlightTs)}"]`)
+      ?.scrollIntoView({ block: "center" });
+    const timer = setTimeout(() => setHighlightTs(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightTs, selectedId]);
 
   const send = (text: string) => {
     if (!selectedId || !actingUser) return;
@@ -326,6 +378,7 @@ export function App() {
                     replyCount={replies.length}
                     lastReplyTs={replies.at(-1)?.ts}
                     hasUnreadReplies={unreadThreadTs.has(m.ts)}
+                    highlighted={m.ts === highlightTs}
                     onOpenThread={setOpenThreadTs}
                   />
                 );
@@ -353,6 +406,7 @@ export function App() {
             actingUser={actingUser}
             activeAppId={activeAppId}
             width={threadWidth}
+            highlightTs={highlightTs}
             onWidthChange={setThreadWidth}
             onClose={() => setOpenThreadTs(null)}
           />

@@ -243,6 +243,49 @@ describe("reactions.*", () => {
   });
 });
 
+describe("chat.getPermalink", () => {
+  test("returns an /archives/ link with the ts's dot stripped, Slack-style", () => {
+    const store = makeStore();
+    const posted = methods["chat.postMessage"]({ channel: "C01GEN", text: "hi" }, ctxFor(store));
+    const res = methods["chat.getPermalink"](
+      { channel: "C01GEN", message_ts: posted.ts },
+      ctxFor(store),
+    );
+    expect(res.ok).toBe(true);
+    expect(res.channel).toBe("C01GEN");
+    expect(res.permalink).toBe(
+      `http://localhost:3000/archives/C01GEN/p${posted.ts.replace(".", "")}`,
+    );
+  });
+
+  test("a threaded message's link carries thread_ts and cid so it opens the thread", () => {
+    const store = makeStore();
+    const root = methods["chat.postMessage"]({ channel: "C01GEN", text: "root" }, ctxFor(store));
+    const reply = methods["chat.postMessage"](
+      { channel: "C01GEN", text: "reply", thread_ts: root.ts },
+      ctxFor(store),
+    );
+    const res = methods["chat.getPermalink"](
+      { channel: "C01GEN", message_ts: reply.ts },
+      ctxFor(store),
+    );
+    expect(res.permalink).toBe(
+      `http://localhost:3000/archives/C01GEN/p${reply.ts.replace(".", "")}?thread_ts=${root.ts}&cid=C01GEN`,
+    );
+  });
+
+  test("errors on an unknown channel or message", () => {
+    const store = makeStore();
+    expect(methods["chat.getPermalink"]({ channel: "nope", message_ts: "1.1" }, ctxFor(store))).toEqual({
+      ok: false,
+      error: "channel_not_found",
+    });
+    expect(
+      methods["chat.getPermalink"]({ channel: "C01GEN", message_ts: "9.999999" }, ctxFor(store)),
+    ).toEqual({ ok: false, error: "message_not_found" });
+  });
+});
+
 describe("emoji.list", () => {
   test("returns configured custom emoji as name -> URL rooted at the store's httpBase", () => {
     const store = makeStore({ emojis: { custom_smile: "/tmp/smile.png", super_sad: "/tmp/sad.png" } });

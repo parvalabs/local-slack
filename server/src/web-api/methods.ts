@@ -138,6 +138,23 @@ export const methods: Record<string, Handler> = {
     return ok({ message_ts: ts });
   },
 
+  "chat.getPermalink": (args, { store, app }) => {
+    const channel = resolveChannelId(store, args.channel, app.botUserId);
+    if (!store.channels.has(channel)) return err("channel_not_found");
+    const ts: string = args.message_ts ?? "";
+    const message = store.findMessage(channel, ts);
+    if (!message) return err("message_not_found");
+    // Slack's permalink form: the ts with its dot removed, behind a "p". A reply
+    // also carries the thread it lives in, which is what makes the link open the
+    // thread pane rather than just the channel.
+    const permalinkId = `p${ts.replace(".", "")}`;
+    const query = message.thread_ts ? `?thread_ts=${message.thread_ts}&cid=${channel}` : "";
+    return ok({
+      channel,
+      permalink: `${store.runtime.httpBase}/archives/${channel}/${permalinkId}${query}`,
+    });
+  },
+
   "chat.meMessage": (args, { store, app }) => {
     const channel = resolveChannelId(store, args.channel, app.botUserId);
     const ts = nextTs();

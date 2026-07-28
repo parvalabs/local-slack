@@ -280,6 +280,20 @@ body {
 .msg:hover {
   background: #f8f8f8;
 }
+/* Flash a message arrived at via a permalink, then fade back. */
+.msg.highlighted {
+  background: #fff8dd;
+  animation: msg-flash 2.5s ease-out;
+}
+@keyframes msg-flash {
+  0%,
+  60% {
+    background: #fdf0bd;
+  }
+  100% {
+    background: transparent;
+  }
+}
 .msg-hover-actions {
   position: absolute;
   top: -14px;

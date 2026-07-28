@@ -18,6 +18,7 @@ export function ThreadPane({
   actingUser,
   activeAppId,
   width,
+  highlightTs,
   onWidthChange,
   onClose,
 }: {
@@ -29,6 +30,7 @@ export function ThreadPane({
   actingUser: string;
   activeAppId: string;
   width: number;
+  highlightTs?: string | null;
   onWidthChange: (width: number) => void;
   onClose: () => void;
 }) {
@@ -91,7 +93,14 @@ export function ThreadPane({
           {replies.length} {replies.length === 1 ? "reply" : "replies"}
         </div>
         {replies.map((r) => (
-          <Message key={r.ts} message={r} users={users} actingUser={actingUser} hideThreadAffordance />
+          <Message
+            key={r.ts}
+            message={r}
+            users={users}
+            actingUser={actingUser}
+            highlighted={r.ts === highlightTs}
+            hideThreadAffordance
+          />
         ))}
       </div>
 

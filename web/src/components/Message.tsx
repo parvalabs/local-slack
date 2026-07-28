@@ -24,6 +24,7 @@ export function Message({
   replyCount = 0,
   lastReplyTs,
   hasUnreadReplies = false,
+  highlighted = false,
   onOpenThread,
   hideThreadAffordance = false,
 }: {
@@ -33,6 +34,7 @@ export function Message({
   replyCount?: number;
   lastReplyTs?: string;
   hasUnreadReplies?: boolean;
+  highlighted?: boolean;
   onOpenThread?: (ts: string) => void;
   hideThreadAffordance?: boolean;
 }) {
@@ -65,7 +67,7 @@ export function Message({
   };
 
   return (
-    <div className="msg">
+    <div className={`msg ${highlighted ? "highlighted" : ""}`} data-ts={message.ts}>
       <div className="msg-avatar" style={{ background: avatarColor(message.user ?? "bot") }}>
         {initials(name)}
       </div>
