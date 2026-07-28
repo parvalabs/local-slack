@@ -569,6 +569,14 @@ body {
   pointer-events: none;
   color: var(--text);
 }
+.mrkdwn-quote {
+  display: block;
+  margin: 2px 0;
+  padding-left: 10px;
+  border-left: 3px solid #ddd;
+  color: inherit;
+}
+
 .composer-mention {
   color: #1264a3;
   background: #e8f5fb;

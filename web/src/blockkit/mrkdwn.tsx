@@ -13,9 +13,15 @@ function toHtml(input: string): string {
   // Point real-Slack permalinks at this server before anything is linkified, so
   // both the <url> forms and bare ones below pick up the rewritten origin.
   let h = localizeSlackUrls(esc(input));
-  // <url|label> and <url>
-  h = h.replace(/&lt;(https?:[^|&]+)\|([^&]+)&gt;/g, '<a href="$1" target="_blank" rel="noreferrer">$2</a>');
-  h = h.replace(/&lt;(https?:[^&]+)&gt;/g, '<a href="$1" target="_blank" rel="noreferrer">$1</a>');
+  // <url|label> and <url>. Matched lazily up to the closing "&gt;" rather than
+  // by excluding "&": esc() turned every "&" in the URL into "&amp;", so a query
+  // string with more than one parameter (a thread permalink, say) would
+  // otherwise never match and the raw <…|…> would render as literal text.
+  h = h.replace(
+    /&lt;(https?:[^\s|]*?)\|([^\n]*?)&gt;/g,
+    '<a href="$1" target="_blank" rel="noreferrer">$2</a>',
+  );
+  h = h.replace(/&lt;(https?:[^\s|]*?)&gt;/g, '<a href="$1" target="_blank" rel="noreferrer">$1</a>');
   // Bare URLs. Slack's client auto-links these, and a rewritten permalink is
   // useless if it isn't clickable. The leading (^|[\s(]) keeps it clear of the
   // anchors just built above, where URLs sit behind `href="` or `>`.
@@ -46,8 +52,43 @@ function toHtml(input: string): string {
   h = h.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
   h = h.replace(/~([^~\n]+)~/g, "<del>$1</del>");
   h = h.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  h = blockquotes(h);
   h = h.replace(/\n/g, "<br/>");
   return h;
+}
+
+/**
+ * Slack's "> quoted line" and ">>> quote everything after this". Runs after the
+ * inline passes, so links and mentions inside a quote still render, but before
+ * newlines become <br/> while lines are still separable. The markers arrive as
+ * "&gt;" because esc() has already run.
+ */
+function blockquotes(h: string): string {
+  const quote = (body: string) => `<blockquote class="mrkdwn-quote">${body}</blockquote>`;
+
+  const triple = /^&gt;&gt;&gt;[ \t]?/m.exec(h);
+  if (triple) {
+    const start = triple.index;
+    return h.slice(0, start) + quote(h.slice(start + triple[0].length));
+  }
+
+  // Consecutive "&gt;" lines collapse into one quote, the way Slack renders them.
+  const out: string[] = [];
+  let run: string[] | null = null;
+  const flush = () => {
+    if (run) out.push(quote(run.join("\n")));
+    run = null;
+  };
+  for (const line of h.split("\n")) {
+    const quoted = /^&gt;[ \t]?(.*)$/.exec(line);
+    if (quoted) (run ??= []).push(quoted[1]);
+    else {
+      flush();
+      out.push(line);
+    }
+  }
+  flush();
+  return out.join("\n");
 }
 
 function onMrkdwnClick(e: React.MouseEvent<HTMLSpanElement>) {

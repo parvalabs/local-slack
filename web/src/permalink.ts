@@ -58,9 +58,13 @@ export function parseArchiveUrl(href: string): ArchiveTarget | null {
   }
 }
 
-/** Rewrites any `https://<workspace>.slack.com` origin to this server's, so
- *  permalinks pasted from (or generated as if from) real Slack resolve here.
- *  Only the origin changes — the /archives/… path is already compatible. */
+/** Rewrites any Slack origin to this server's, so permalinks pasted from (or
+ *  generated as if from) real Slack resolve here. Only the origin changes — the
+ *  /archives/… path is already compatible.
+ *
+ *  The subdomain is optional: real permalinks carry the workspace
+ *  (`my-org.slack.com`), but bots often build links against a bare `slack.com`,
+ *  and those should localize too. */
 export function localizeSlackUrls(text: string): string {
-  return text.replace(/https?:\/\/[a-z0-9-]+\.slack\.com/gi, location.origin);
+  return text.replace(/https?:\/\/(?:[a-z0-9-]+\.)*slack\.com/gi, location.origin);
 }
