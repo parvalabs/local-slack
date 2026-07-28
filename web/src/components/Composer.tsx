@@ -88,6 +88,28 @@ function serialize(text: string, spans: RefSpan[]): string {
 }
 
 /**
+ * Resolves leftover bare "@handle" / "#channel" text into real reference syntax
+ * on send, so a fully typed handle links whether you finish it with space, Tab
+ * or just Enter — no need to confirm the menu first.
+ *
+ * Exact matches only, the same rule space completion uses: a half-typed "@bo"
+ * stays literal rather than guessing at a person. Runs *after* serialize, whose
+ * output has references as "<@U…>" — the leading `(^|\s)` means the "@" inside
+ * those is never re-matched, since it's preceded by "<".
+ */
+function resolveBareHandles(text: string, users: User[], channels: Channel[]): string {
+  return text
+    .replace(/(^|\s)@([a-zA-Z0-9._'-]+)/g, (whole, pre: string, handle: string) => {
+      const u = users.find((x) => x.name.toLowerCase() === handle.toLowerCase());
+      return u ? `${pre}<@${u.id}>` : whole;
+    })
+    .replace(/(^|\s)#([a-zA-Z0-9._-]+)/g, (whole, pre: string, name: string) => {
+      const c = channels.find((x) => !x.is_im && x.name.toLowerCase() === name.toLowerCase());
+      return c ? `${pre}<#${c.id}|${c.name}>` : whole;
+    });
+}
+
+/**
  * Splits text into plain/reference chunks for the highlight overlay (see the
  * comment on `.composer-input-wrap` in styles.css for why this is a separate
  * div layered under a text-transparent textarea, not styling the textarea
@@ -160,7 +182,7 @@ export function Composer({
   }, [trigger, users, channels]);
 
   const send = () => {
-    const trimmed = serialize(text, spans).trim();
+    const trimmed = resolveBareHandles(serialize(text, spans), users, channels).trim();
     if (!trimmed) return;
     onSend(trimmed);
     setText("");
