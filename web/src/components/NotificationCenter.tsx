@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Channel, Message, User } from "../types.ts";
 import { userNames } from "../blockkit/mentions.ts";
 import { channelNames } from "../blockkit/channels.ts";
+import { customEmojis, emojiChar } from "../blockkit/emoji.ts";
 import { avatarColor, channelLabel, formatTime, initials, userLabel } from "../util.ts";
 
 export interface Notification {
@@ -23,6 +24,31 @@ function preview(text: string | undefined, max = 80): string {
     .trim();
   if (!flat) return "sent a message";
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/** Turns `:shortcode:`s in the (already truncated) preview into what the message
+ *  list shows: the unicode character, or a config-declared custom emoji's image.
+ *  emojiChar leaves anything unrecognised as the literal `:name:`. */
+function withEmoji(text: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /:([a-zA-Z0-9_+-]+):/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const name = m[1];
+    const url = customEmojis.get(name);
+    out.push(
+      url ? (
+        <img key={m.index} className="emoji-img" src={url} alt={`:${name}:`} title={`:${name}:`} />
+      ) : (
+        emojiChar(name)
+      ),
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
 }
 
 export function NotificationCenter({
@@ -85,7 +111,7 @@ export function NotificationCenter({
                       </span>
                       <span className="notif-time">{formatTime(message.ts)}</span>
                     </span>
-                    <span className="notif-text">{preview(message.text)}</span>
+                    <span className="notif-text">{withEmoji(preview(message.text))}</span>
                   </span>
                 </button>
               );
