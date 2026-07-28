@@ -807,6 +807,122 @@ body {
   background: #1264a3;
   border-color: #1264a3;
 }
+/* Notification centre (bell + dropdown) */
+.notif {
+  position: relative;
+  display: flex;
+}
+.notif-bell {
+  position: relative;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.notif-bell:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.notif-bell.has-unread {
+  border-color: var(--red);
+}
+.notif-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: var(--red);
+  color: #fff;
+  border-radius: 9px;
+  min-width: 17px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+/* Click-outside catcher; sits under the panel but over everything else. */
+.notif-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 340px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #fff;
+  color: var(--text);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 71;
+}
+.notif-head {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.notif-empty {
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.notif-item {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+.notif-item:hover {
+  background: #f6f6f6;
+}
+.notif-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.notif-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.notif-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+.notif-name {
+  font-weight: 700;
+}
+.notif-where,
+.notif-time {
+  color: var(--muted);
+}
+.notif-text {
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .sound-toggle {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.25);

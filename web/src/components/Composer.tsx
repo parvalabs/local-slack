@@ -23,7 +23,12 @@ interface RefSpan {
   channelName?: string; // only for kind "channel" — <#id|name> needs the name too
 }
 
-type Candidate = { kind: "user"; id: string; display: string; label: string } | { kind: "channel"; id: string; display: string; label: string };
+/** `handle` is the thing you actually *type* (a user's `name`, a channel's name),
+ *  as opposed to `label`/`display` which show the friendlier real name — space
+ *  autocompletion matches on it. */
+type Candidate =
+  | { kind: "user"; id: string; display: string; label: string; handle: string }
+  | { kind: "channel"; id: string; display: string; label: string; handle: string };
 
 /** If the cursor sits right after an "@word" or "#word" (word started at a
  *  line start or after whitespace), returns where that reference starts,
@@ -140,12 +145,18 @@ export function Composer({
       return users
         .filter((u) => u.name.toLowerCase().includes(q) || (u.real_name ?? "").toLowerCase().includes(q))
         .slice(0, 8)
-        .map((u) => ({ kind: "user" as const, id: u.id, display: `@${u.real_name || u.name}`, label: u.real_name || u.name }));
+        .map((u) => ({
+          kind: "user" as const,
+          id: u.id,
+          display: `@${u.real_name || u.name}`,
+          label: u.real_name || u.name,
+          handle: u.name,
+        }));
     }
     return channels
       .filter((c) => !c.is_im && c.name.toLowerCase().includes(q))
       .slice(0, 8)
-      .map((c) => ({ kind: "channel" as const, id: c.id, display: `#${c.name}`, label: c.name }));
+      .map((c) => ({ kind: "channel" as const, id: c.id, display: `#${c.name}`, label: c.name, handle: c.name }));
   }, [trigger, users, channels]);
 
   const send = () => {
@@ -253,6 +264,22 @@ export function Composer({
                 e.preventDefault();
                 selectCandidate(matches[activeIndex]);
                 return;
+              }
+              // Space confirms the reference when what you typed *is* the handle,
+              // the way finishing "@alice " in Slack links it without a keystroke.
+              // Deliberately an exact match rather than "whatever's highlighted":
+              // on a prefix like "@al" the highlighted row is a guess, and silently
+              // turning plain text into the wrong person is worse than making you
+              // press Tab. selectCandidate appends the space itself.
+              if (e.key === " ") {
+                const exact = matches.find(
+                  (c) => c.handle.toLowerCase() === trigger.query.toLowerCase(),
+                );
+                if (exact) {
+                  e.preventDefault();
+                  selectCandidate(exact);
+                  return;
+                }
               }
               if (e.key === "Escape") {
                 e.preventDefault();

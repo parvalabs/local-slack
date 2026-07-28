@@ -17,6 +17,7 @@ import { Modal } from "./components/Modal.tsx";
 import { HomeTab } from "./components/HomeTab.tsx";
 import { Inspector } from "./components/Inspector.tsx";
 import { ThreadPane } from "./components/ThreadPane.tsx";
+import { NotificationCenter, type Notification } from "./components/NotificationCenter.tsx";
 import { setChannelClickHandler } from "./blockkit/channels.ts";
 import { channelLabel } from "./util.ts";
 
@@ -80,9 +81,12 @@ export function App() {
   const openThreadRoot = openThreadTs ? messages.find((m) => m.ts === openThreadTs) : undefined;
   const openThreadReplies = openThreadTs ? (repliesByRoot.get(openThreadTs) ?? []) : [];
 
-  // Close the thread pane whenever the channel changes.
+  // Close the thread pane whenever the channel changes — unless a notification
+  // asked to land on a specific thread in the channel being opened.
+  const pendingThreadTs = useRef<string | null>(null);
   useEffect(() => {
-    setOpenThreadTs(null);
+    setOpenThreadTs(pendingThreadTs.current);
+    pendingThreadTs.current = null;
   }, [selectedId]);
 
   // Mark the open channel as read - both when it's first opened, and again
@@ -123,31 +127,56 @@ export function App() {
     return ids;
   }, [repliesByRoot, state.lastReadThreadTs, openThreadTs]);
 
-  // Unread badge for the browser tab. Counts messages, not conversations, and
-  // deliberately avoids double-counting: a channel you're not in contributes all
+  // Everything unread, newest first — one source of truth behind the bell's
+  // badge, its dropdown, and the browser-tab count, so the three can't drift.
+  // Deliberately avoids double-counting: a channel you're not in contributes all
   // its unseen messages, while the open one contributes only replies hidden
   // inside threads you aren't currently reading.
-  const unreadTotal = useMemo(() => {
-    let n = 0;
+  const notifications = useMemo(() => {
+    const out: Notification[] = [];
+    const push = (m: Notification["message"], channelId: string) => {
+      if (m.user === actingUser) return; // your own sends aren't news
+      out.push({ message: m, channelId });
+    };
     for (const c of state.channels) {
       const list = state.messages[c.id] ?? [];
       if (c.id === selectedId) {
         for (const m of list) {
           if (!m.thread_ts || m.thread_ts === openThreadTs) continue;
           const seen = state.lastReadThreadTs[m.thread_ts];
-          if (!seen || m.ts > seen) n++;
+          if (!seen || m.ts > seen) push(m, c.id);
         }
       } else {
         const seen = state.lastReadTs[c.id];
-        for (const m of list) if (!seen || m.ts > seen) n++;
+        for (const m of list) if (!seen || m.ts > seen) push(m, c.id);
       }
     }
-    return n;
-  }, [state.channels, state.messages, state.lastReadTs, state.lastReadThreadTs, selectedId, openThreadTs]);
+    return out.sort((a, b) => (a.message.ts < b.message.ts ? 1 : -1)).slice(0, 50);
+  }, [
+    state.channels,
+    state.messages,
+    state.lastReadTs,
+    state.lastReadThreadTs,
+    selectedId,
+    openThreadTs,
+    actingUser,
+  ]);
 
   useEffect(() => {
-    document.title = unreadTotal > 0 ? `(${unreadTotal}) local-slack` : "local-slack";
-  }, [unreadTotal]);
+    document.title = notifications.length > 0 ? `(${notifications.length}) local-slack` : "local-slack";
+  }, [notifications.length]);
+
+  // Jumping to a notification may need to switch channel *and* open a thread —
+  // but switching channels clears the open thread (above), so hand the thread to
+  // that effect rather than racing it.
+  const openNotification = (channelId: string, threadTs?: string) => {
+    if (channelId === selectedId) {
+      setOpenThreadTs(threadTs ?? null);
+      return;
+    }
+    pendingThreadTs.current = threadTs ?? null;
+    setSelectedId(channelId);
+  };
 
   // Your own messages shouldn't chime.
   useEffect(() => {
@@ -218,13 +247,20 @@ export function App() {
               ))}
             </select>
           </label>
+          <NotificationCenter
+            notifications={notifications}
+            users={state.users}
+            channels={state.channels}
+            botUserIds={botUserIds}
+            onOpen={openNotification}
+          />
           <button
             className="sound-toggle"
             onClick={toggleSound}
             title={state.soundMuted ? "Unmute the new-message sound" : "Mute the new-message sound"}
             aria-label={state.soundMuted ? "Unmute the new-message sound" : "Mute the new-message sound"}
           >
-            {state.soundMuted ? "🔇" : "🔔"}
+            {state.soundMuted ? "🔇" : "🔊"}
           </button>
           <button
             className={`inspector-toggle ${showInspector ? "on" : ""}`}
