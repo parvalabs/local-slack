@@ -12,10 +12,25 @@ export interface State {
   emojis: Record<string, string>; // custom emoji name -> image URL
   messages: Record<string, Message[]>;
   lastReadTs: Record<string, string>; // channelId -> ts of the newest message seen, for unread bolding
+  // Thread reads are tracked separately from channel reads (thread root ts -> newest
+  // reply seen), matching Slack: opening a channel doesn't mark its threads read, so a
+  // reply tucked inside a collapsed thread stays flagged until you actually open it.
+  lastReadThreadTs: Record<string, string>;
+  soundMuted: boolean;
   modalStack: any[];
   viewErrors: Record<string, string> | null;
   homeViews: Record<string, Record<string, any>>; // userId -> appId -> view
   log: LogEntry[];
+}
+
+const SOUND_MUTED_KEY = "local-slack:sound-muted";
+
+function storedMuted(): boolean {
+  try {
+    return localStorage.getItem(SOUND_MUTED_KEY) === "1";
+  } catch {
+    return false; // private mode / storage disabled — default to audible
+  }
 }
 
 const initial: State = {
@@ -27,6 +42,8 @@ const initial: State = {
   emojis: {},
   messages: {},
   lastReadTs: {},
+  lastReadThreadTs: {},
+  soundMuted: storedMuted(),
   modalStack: [],
   viewErrors: null,
   homeViews: {},
@@ -53,6 +70,53 @@ function set(patch: Partial<State>) {
   for (const l of listeners) l();
 }
 
+// Whose messages *not* to chime for — your own sends shouldn't make a noise.
+// Set from App as the "Act as" selection changes.
+let selfUserId = "";
+export function setSelfUserId(id: string) {
+  selfUserId = id;
+}
+
+export function toggleSound() {
+  const soundMuted = !state.soundMuted;
+  try {
+    localStorage.setItem(SOUND_MUTED_KEY, soundMuted ? "1" : "0");
+  } catch {
+    /* storage disabled — the toggle still works for this session */
+  }
+  set({ soundMuted });
+}
+
+let audioCtx: AudioContext | null = null;
+
+/** A short two-tone blip, synthesized rather than bundled as an audio file so the
+ *  compiled single-file binary stays self-contained (the whole UI is one inlined
+ *  index.html — see vite-plugin-singlefile). */
+function playChime() {
+  try {
+    audioCtx ??= new AudioContext();
+    // Browsers start the context suspended until a user gesture; once the human
+    // has clicked anywhere this resumes and stays resumed.
+    if (audioCtx.state === "suspended") void audioCtx.resume();
+
+    const now = audioCtx.currentTime;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    gain.connect(audioCtx.destination);
+
+    const osc = audioCtx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.setValueAtTime(1175, now + 0.08);
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  } catch {
+    /* no AudioContext / autoplay blocked — sound is a nicety, never a hard failure */
+  }
+}
+
 let ws: WebSocket | null = null;
 
 export function connect() {
@@ -73,11 +137,14 @@ function handle(msg: any) {
       const s = msg.state;
       const messages: Record<string, Message[]> = s.messages ?? {};
       // Everything that already existed before this session opened counts as
-      // "seen" - only messages that arrive live should bold a channel.
+      // "seen" - only messages that arrive live should bold a channel or flag a
+      // thread. Lists are chronological, so the last write per key wins.
       const lastReadTs: Record<string, string> = {};
+      const lastReadThreadTs: Record<string, string> = {};
       for (const [channelId, list] of Object.entries(messages)) {
         const last = list.at(-1);
         if (last) lastReadTs[channelId] = last.ts;
+        for (const m of list) if (m.thread_ts) lastReadThreadTs[m.thread_ts] = m.ts;
       }
       set({
         connected: true,
@@ -88,6 +155,7 @@ function handle(msg: any) {
         emojis: s.emojis ?? {},
         messages,
         lastReadTs,
+        lastReadThreadTs,
         modalStack: s.modalStack ?? [],
         homeViews: s.homeViews ?? {},
         log: s.log ?? [],
@@ -99,6 +167,7 @@ function handle(msg: any) {
       const list = state.messages[m.channel] ?? [];
       if (!list.some((x) => x.ts === m.ts)) {
         set({ messages: { ...state.messages, [m.channel]: [...list, m] } });
+        if (!state.soundMuted && m.user !== selfUserId) playChime();
       }
       break;
     }
@@ -152,6 +221,13 @@ export function markChannelRead(channelId: string) {
   const last = state.messages[channelId]?.at(-1);
   if (!last || state.lastReadTs[channelId] === last.ts) return;
   set({ lastReadTs: { ...state.lastReadTs, [channelId]: last.ts } });
+}
+
+/** Marks a thread read up through its newest reply — call while its pane is open. */
+export function markThreadRead(channelId: string, rootTs: string) {
+  const newest = (state.messages[channelId] ?? []).filter((m) => m.thread_ts === rootTs).at(-1);
+  if (!newest || state.lastReadThreadTs[rootTs] === newest.ts) return;
+  set({ lastReadThreadTs: { ...state.lastReadThreadTs, [rootTs]: newest.ts } });
 }
 
 export function postMessage(channel: string, user: string, text: string, thread_ts?: string) {

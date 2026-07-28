@@ -116,6 +116,16 @@ app.command("/echo", async ({ ack, respond, command }) => {
   await respond(`Echo: ${command.text}`);
 });
 
+// Mentioning the bot (@testbot …) delivers app_mention *in addition to* the
+// message event above — same as real Slack, so a bot subscribed to both sees
+// one mention twice and is expected to dedupe if it cares.
+app.event("app_mention", async ({ event, say }) => {
+  await say({
+    text: `you mentioned me: ${event.text}`,
+    ...(event.thread_ts ? { thread_ts: event.thread_ts } : {}),
+  });
+});
+
 // App Home (M3)
 app.event("app_home_opened", async ({ event, client }) => {
   await client.views.publish({

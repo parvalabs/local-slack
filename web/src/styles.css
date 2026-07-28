@@ -324,6 +324,20 @@ body {
   font-weight: 700;
   font-size: 13px;
 }
+.thread-summary.unread {
+  background: #fff;
+  border-color: var(--border);
+}
+.thread-summary.unread .thread-summary-count {
+  font-weight: 800;
+}
+.thread-unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  flex-shrink: 0;
+}
 .thread-summary-time {
   color: var(--muted);
   font-size: 12px;
@@ -792,6 +806,18 @@ body {
 .inspector-toggle.on {
   background: #1264a3;
   border-color: #1264a3;
+}
+.sound-toggle {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.sound-toggle:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 .inspector {
   position: fixed;

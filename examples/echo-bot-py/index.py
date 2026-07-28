@@ -124,6 +124,15 @@ def handle_echo_command(ack, respond, command):
     respond(f"Echo: {command['text']}")
 
 
+# Mentioning the bot (@testbot ...) delivers app_mention *in addition to* the
+# message event above -- same as real Slack, so a bot subscribed to both sees
+# one mention twice and is expected to dedupe if it cares.
+@app.event("app_mention")
+def handle_app_mention(event, say):
+    kwargs = {"thread_ts": event["thread_ts"]} if event.get("thread_ts") else {}
+    say(text=f"you mentioned me: {event.get('text') or ''}", **kwargs)
+
+
 # App Home
 @app.event("app_home_opened")
 def handle_app_home_opened(event, client):

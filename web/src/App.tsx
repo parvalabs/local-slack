@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { connect, markChannelRead, openHome, postMessage, sendSlashCommand } from "./client.ts";
+import {
+  connect,
+  markChannelRead,
+  markThreadRead,
+  openHome,
+  postMessage,
+  sendSlashCommand,
+  setSelfUserId,
+  toggleSound,
+} from "./client.ts";
 import { useLocalSlack } from "./useStore.ts";
 import { Sidebar, appIdFromHomeId, isHomeId } from "./components/Sidebar.tsx";
 import { Message } from "./components/Message.tsx";
@@ -95,6 +104,56 @@ export function App() {
     return ids;
   }, [state.channels, state.messages, state.lastReadTs, selectedId]);
 
+  // Keep the open thread marked read as replies stream in.
+  useEffect(() => {
+    if (!selectedId || !openThreadTs) return;
+    markThreadRead(selectedId, openThreadTs);
+  }, [selectedId, openThreadTs, openThreadReplies.length]);
+
+  // Thread roots in this channel whose newest reply hasn't been seen. Unlike
+  // channels, these survive opening the channel - only opening the thread itself
+  // clears them, so a reply inside a collapsed thread stays visible.
+  const unreadThreadTs = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [rootTs, replies] of repliesByRoot) {
+      if (rootTs === openThreadTs) continue;
+      const newest = replies.at(-1);
+      if (newest && state.lastReadThreadTs[rootTs] !== newest.ts) ids.add(rootTs);
+    }
+    return ids;
+  }, [repliesByRoot, state.lastReadThreadTs, openThreadTs]);
+
+  // Unread badge for the browser tab. Counts messages, not conversations, and
+  // deliberately avoids double-counting: a channel you're not in contributes all
+  // its unseen messages, while the open one contributes only replies hidden
+  // inside threads you aren't currently reading.
+  const unreadTotal = useMemo(() => {
+    let n = 0;
+    for (const c of state.channels) {
+      const list = state.messages[c.id] ?? [];
+      if (c.id === selectedId) {
+        for (const m of list) {
+          if (!m.thread_ts || m.thread_ts === openThreadTs) continue;
+          const seen = state.lastReadThreadTs[m.thread_ts];
+          if (!seen || m.ts > seen) n++;
+        }
+      } else {
+        const seen = state.lastReadTs[c.id];
+        for (const m of list) if (!seen || m.ts > seen) n++;
+      }
+    }
+    return n;
+  }, [state.channels, state.messages, state.lastReadTs, state.lastReadThreadTs, selectedId, openThreadTs]);
+
+  useEffect(() => {
+    document.title = unreadTotal > 0 ? `(${unreadTotal}) local-slack` : "local-slack";
+  }, [unreadTotal]);
+
+  // Your own messages shouldn't chime.
+  useEffect(() => {
+    setSelfUserId(actingUser);
+  }, [actingUser]);
+
   // (Re)request the App Home whenever it's shown or the acting user changes.
   useEffect(() => {
     if (isHome && homeAppId && actingUser) openHome(homeAppId, actingUser);
@@ -160,6 +219,14 @@ export function App() {
             </select>
           </label>
           <button
+            className="sound-toggle"
+            onClick={toggleSound}
+            title={state.soundMuted ? "Unmute the new-message sound" : "Mute the new-message sound"}
+            aria-label={state.soundMuted ? "Unmute the new-message sound" : "Mute the new-message sound"}
+          >
+            {state.soundMuted ? "🔇" : "🔔"}
+          </button>
+          <button
             className={`inspector-toggle ${showInspector ? "on" : ""}`}
             onClick={() => setShowInspector((s) => !s)}
           >
@@ -222,6 +289,7 @@ export function App() {
                     actingUser={actingUser}
                     replyCount={replies.length}
                     lastReplyTs={replies.at(-1)?.ts}
+                    hasUnreadReplies={unreadThreadTs.has(m.ts)}
                     onOpenThread={setOpenThreadTs}
                   />
                 );

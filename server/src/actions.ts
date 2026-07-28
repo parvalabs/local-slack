@@ -35,6 +35,39 @@ function appFor(store: Store, appId: string | undefined): AppConfig {
 }
 
 /**
+ * Deliver `app_mention` to every app whose bot user is `<@…>`-mentioned in the text.
+ * Real Slack sends this *in addition to* the `message` event (an app subscribed to
+ * both receives two events for one mention), and only to the app that was actually
+ * named — unlike `message`, which fans out to every app in the channel. Mentions of
+ * an app that isn't in the channel are ignored, matching Slack: it can't see the
+ * conversation, so it can't be mentioned in it.
+ */
+async function fanOutAppMentions(
+  store: Store,
+  gateway: BotGateway,
+  channel: string,
+  msg: { user?: string; text?: string; ts: string; thread_ts?: string },
+): Promise<void> {
+  const mentioned = new Set([...(msg.text ?? "").matchAll(/<@([A-Z0-9]+)>/g)].map((m) => m[1]));
+  if (!mentioned.size) return;
+
+  const apps = store.appsInChannel(channel).filter((a) => mentioned.has(a.botUserId));
+  await Promise.all(
+    apps.map((a) =>
+      gateway.deliverEvent(a.appId, {
+        type: "app_mention",
+        user: msg.user,
+        text: msg.text ?? "",
+        ts: msg.ts,
+        channel,
+        event_ts: msg.ts,
+        ...(msg.thread_ts ? { thread_ts: msg.thread_ts } : {}),
+      }),
+    ),
+  );
+}
+
+/**
  * A human (via the UI or the control API) posts a message as a workspace user.
  * Stores it and fans out a `message` event to every app in the channel.
  */
@@ -68,6 +101,7 @@ export async function userPostMessage(
   if (opts.thread_ts) event.thread_ts = opts.thread_ts;
 
   await fanOutEvent(store, gateway, channel, event);
+  await fanOutAppMentions(store, gateway, channel, msg);
   return msg;
 }
 

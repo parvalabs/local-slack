@@ -23,6 +23,7 @@ export function Message({
   actingUser,
   replyCount = 0,
   lastReplyTs,
+  hasUnreadReplies = false,
   onOpenThread,
   hideThreadAffordance = false,
 }: {
@@ -31,6 +32,7 @@ export function Message({
   actingUser: string;
   replyCount?: number;
   lastReplyTs?: string;
+  hasUnreadReplies?: boolean;
   onOpenThread?: (ts: string) => void;
   hideThreadAffordance?: boolean;
 }) {
@@ -131,7 +133,11 @@ export function Message({
         )}
 
         {replyCount > 0 && (
-          <button className="thread-summary" onClick={() => onOpenThread?.(message.ts)}>
+          <button
+            className={`thread-summary ${hasUnreadReplies ? "unread" : ""}`}
+            onClick={() => onOpenThread?.(message.ts)}
+          >
+            {hasUnreadReplies && <span className="thread-unread-dot" aria-label="unread replies" />}
             <span className="thread-summary-count">
               {replyCount} {replyCount === 1 ? "reply" : "replies"}
             </span>
