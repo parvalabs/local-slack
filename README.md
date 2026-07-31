@@ -156,13 +156,7 @@ channels:
 ```
 
 A user's optional `email` is returned as `profile.email` from `users.info` / `users.list`, and is what
-`users.lookupByEmail` matches on. As in real Slack, **events carry only the user id** — a `message`
-event has `user: "U01ALICE"` and no profile — so a bot that needs the address looks it up:
-
-```js
-const { user } = await client.users.info({ user: event.user });
-user.profile.email; // alice@example.com
-```
+`users.lookupByEmail` matches on.
 
 ### Custom emoji
 

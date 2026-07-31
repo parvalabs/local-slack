@@ -21,10 +21,8 @@ app:
   requestUrl: http://localhost:4000/slack/events
 
 users:
-  # `email` is optional. It's surfaced as profile.email on users.info /
-  # users.list, and is what users.lookupByEmail matches against — set it if your
-  # app resolves people by email. Note that, as in real Slack, message events
-  # carry only the user id, so a bot that needs the address looks it up.
+  # `email` is optional — surfaced as profile.email on users.info / users.list,
+  # and what users.lookupByEmail matches against.
   - { id: U01ALICE, name: alice, real_name: Alice Anderson, email: alice@example.com }
   - { id: U02BOB, name: bob, real_name: Bob Brown, email: bob@example.com }
 
