@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Channel, User } from "../types.ts";
 import { avatarColor, initials, userLabel } from "../util.ts";
 
@@ -132,21 +132,44 @@ function renderHighlighted(text: string, spans: RefSpan[]): React.ReactNode[] {
   return parts;
 }
 
+/**
+ * Unsent text, kept per conversation. What you type in a thread belongs to that
+ * thread (and each channel keeps its own), the way Slack holds a draft in place
+ * rather than carrying it along as you move around.
+ *
+ * Spans ride along with the text: dropping them would turn already-resolved
+ * mentions back into plain "@Name" on restore. Session-only by design — a draft
+ * doesn't survive a reload.
+ *
+ * Callers pass `draftKey` *and* use it as React's `key`, so switching
+ * conversations remounts the composer and re-seeds state from here.
+ */
+const drafts = new Map<string, { text: string; spans: RefSpan[] }>();
+
 export function Composer({
+  draftKey,
   placeholder,
   onSend,
   users = [],
   channels = [],
 }: {
+  draftKey: string;
   placeholder: string;
   onSend: (text: string) => void;
   users?: User[];
   channels?: Channel[];
 }) {
-  const [text, setText] = useState("");
-  const [spans, setSpans] = useState<RefSpan[]>([]);
+  const [text, setText] = useState(() => drafts.get(draftKey)?.text ?? "");
+  const [spans, setSpans] = useState<RefSpan[]>(() => drafts.get(draftKey)?.spans ?? []);
   const [trigger, setTrigger] = useState<TriggerQuery | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // Also clears the entry once the box is empty, so a sent message doesn't leave
+  // a stale draft behind.
+  useEffect(() => {
+    if (text) drafts.set(draftKey, { text, spans });
+    else drafts.delete(draftKey);
+  }, [draftKey, text, spans]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
 

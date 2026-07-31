@@ -150,9 +150,18 @@ app:
   mode: socket                     # "socket" | "events"
   requestUrl: http://localhost:4000/slack/events   # used when mode: events
 users:
-  - { id: U01ALICE, name: alice, real_name: Alice Anderson }
+  - { id: U01ALICE, name: alice, real_name: Alice Anderson, email: alice@example.com }
 channels:
   - { id: C01GEN, name: general, members: [U01ALICE, U0BOT] }
+```
+
+A user's optional `email` is returned as `profile.email` from `users.info` / `users.list`, and is what
+`users.lookupByEmail` matches on. As in real Slack, **events carry only the user id** — a `message`
+event has `user: "U01ALICE"` and no profile — so a bot that needs the address looks it up:
+
+```js
+const { user } = await client.users.info({ user: event.user });
+user.profile.email; // alice@example.com
 ```
 
 ### Custom emoji

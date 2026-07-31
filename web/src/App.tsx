@@ -387,6 +387,8 @@ export function App() {
 
             {channel && (
               <Composer
+                key={`channel:${channel.id}`}
+                draftKey={`channel:${channel.id}`}
                 placeholder={`Message ${channel.is_im ? "" : "#"}${channelLabel(channel, state.users, botUserIds)} as ${humans.find((u) => u.id === actingUser)?.name ?? "…"} — try /echo hi`}
                 onSend={send}
                 users={state.users}

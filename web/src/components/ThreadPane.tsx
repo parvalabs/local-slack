@@ -104,7 +104,14 @@ export function ThreadPane({
         ))}
       </div>
 
-      <Composer placeholder="Reply in thread…" onSend={send} users={users} channels={channels} />
+      <Composer
+        key={`thread:${channelId}:${root.ts}`}
+        draftKey={`thread:${channelId}:${root.ts}`}
+        placeholder="Reply in thread…"
+        onSend={send}
+        users={users}
+        channels={channels}
+      />
     </aside>
   );
 }
