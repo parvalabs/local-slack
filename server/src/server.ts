@@ -10,6 +10,7 @@ import { Interactions } from "./interactions.ts";
 import { webApiRouter } from "./web-api/router.ts";
 import { controlRouter } from "./control/router.ts";
 import { hooksRouter } from "./hooks/router.ts";
+import { filesRouter } from "./files/router.ts";
 
 // A package-relative copy of the built UI (staged here by `bun run build:web` /
 // `scripts/copy-ui.ts`), NOT the monorepo's web/dist — this is what makes the
@@ -53,8 +54,13 @@ function staticHandler(distDir: string) {
   };
 }
 
-export async function startServer(opts: { config: Config; port: number; baseHost?: string }) {
-  const store = new Store(opts.config);
+export async function startServer(opts: {
+  config: Config;
+  port: number;
+  baseHost?: string;
+  filesDir?: string;
+}) {
+  const store = new Store(opts.config, { filesDir: opts.filesDir });
   const socket = new SocketManager(store);
   const gateway = new BotGateway(store, socket);
   const interactions = new Interactions(store);
@@ -64,6 +70,7 @@ export async function startServer(opts: { config: Config; port: number; baseHost
   app.route("/api", webApiRouter({ store, gateway, socket, interactions }));
   app.route("/_control", controlRouter(store, gateway, interactions));
   app.route("/_hooks", hooksRouter(store, interactions));
+  app.route("/", filesRouter(store));
   app.get("/emoji/:name", async (c) => {
     const path = store.config.emojis[c.req.param("name")];
     if (!path) return c.notFound();
@@ -75,6 +82,9 @@ export async function startServer(opts: { config: Config; port: number; baseHost
 
   const server = Bun.serve<SocketData>({
     port: opts.port,
+    // Slack's own per-file limit; Bun's default (128MB) would reject big uploads
+    // with an error that looks nothing like Slack's.
+    maxRequestBodySize: 1024 * 1024 * 1024,
     fetch(req, srv) {
       const url = new URL(req.url);
       if (url.pathname.startsWith("/socket/")) {

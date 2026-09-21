@@ -13,6 +13,10 @@ export default defineConfig({
       "/api": "http://localhost:3000",
       "/_control": "http://localhost:3000",
       "/emoji": "http://localhost:3000",
+      // Uploaded files: the browser view (/files), bots' url_private (/files-pri),
+      // and upload_url targets (/upload).
+      "/files": "http://localhost:3000",
+      "/upload": "http://localhost:3000",
       "/ui": { target: "ws://localhost:3000", ws: true },
     },
   },

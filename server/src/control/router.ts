@@ -10,6 +10,7 @@ import {
   userReaction,
   userEditMessage,
   userDeleteMessage,
+  userShareFiles,
 } from "../actions.ts";
 
 /**
@@ -47,6 +48,31 @@ export function controlRouter(store: Store, gateway: BotGateway, interactions: I
       thread_ts: body.thread_ts,
     });
     return c.json({ ok: true, message });
+  });
+
+  // Simulate a user uploading files, optionally with a message — multipart, with
+  // `channel`, `user`, optional `text` / `thread_ts`, and one or more `file` parts.
+  // Also what the web UI's composer uses.
+  app.post("/upload", async (c) => {
+    const form = await c.req.formData().catch(() => undefined);
+    const field = (k: string) => {
+      const v = form?.get(k);
+      return typeof v === "string" && v ? v : undefined;
+    };
+    const channel = field("channel");
+    const user = field("user");
+    const files = (form?.getAll("file") ?? []).filter((v): v is File => v instanceof File);
+    if (!channel || !user || !files.length) {
+      return c.json({ ok: false, error: "multipart channel, user and at least one file are required" }, 400);
+    }
+    const result = await userShareFiles(store, gateway, {
+      channel,
+      user,
+      text: field("text"),
+      thread_ts: field("thread_ts"),
+      files,
+    });
+    return c.json(result, result.ok ? 200 : 400);
   });
 
   // Simulate a slash command. `appId` picks the target app (defaults to the first

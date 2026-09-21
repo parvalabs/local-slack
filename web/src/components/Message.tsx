@@ -1,11 +1,11 @@
 import { useState } from "react";
-import type { Message as Msg, User } from "../types.ts";
+import type { Message as Msg, SlackFile, User } from "../types.ts";
 import { Blocks } from "../blockkit/BlockKit.tsx";
 import { mrkdwn } from "../blockkit/mrkdwn.tsx";
 import { sendBlockAction, sendReaction, editMessage, deleteMessage } from "../client.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { emojiChar, customEmojis } from "../blockkit/emoji.ts";
-import { avatarColor, formatTime, initials, userLabel } from "../util.ts";
+import { avatarColor, formatSize, formatTime, initials, userLabel } from "../util.ts";
 
 /** Renders a reaction's glyph — a config-declared custom emoji's image, or the
  *  unicode character (mrkdwn.tsx's customEmojiImgHtml handles the same lookup
@@ -15,6 +15,57 @@ function EmojiGlyph({ name }: { name: string }) {
   const url = customEmojis.get(name);
   if (url) return <img className="emoji-img" src={url} alt={`:${name}:`} title={`:${name}:`} />;
   return <>{emojiChar(name)}</>;
+}
+
+const FILE_ICONS: Record<string, string> = {
+  pdf: "📕",
+  zip: "🗜️",
+  gzip: "🗜️",
+  tar: "🗜️",
+  mp3: "🎵",
+  wav: "🎵",
+  mp4: "🎬",
+  mov: "🎬",
+  webm: "🎬",
+};
+
+/** An image renders inline; anything else as a card that opens or downloads it. */
+function FileAttachment({ file }: { file: SlackFile }) {
+  if (file.mode === "tombstone" || !file.permalink) {
+    return <div className="file-tombstone">This file was deleted.</div>;
+  }
+  // The permalink's path is the server's browser view of the file. Only the path
+  // is used: the host is whatever --base-host says bots should use, which isn't
+  // necessarily how this page was loaded.
+  const href = new URL(file.permalink).pathname;
+  const label = file.title || file.name;
+
+  if (file.mimetype?.startsWith("image/")) {
+    return (
+      <div className="file-image">
+        <div className="file-image-name">{label}</div>
+        <a href={href} target="_blank" rel="noreferrer">
+          <img src={href} alt={file.alt_txt ?? label} />
+        </a>
+      </div>
+    );
+  }
+  return (
+    <div className="file-card">
+      <span className="file-card-icon" aria-hidden="true">
+        {FILE_ICONS[file.filetype ?? ""] ?? "📄"}
+      </span>
+      <a className="file-card-body" href={href} target="_blank" rel="noreferrer">
+        <span className="file-card-name">{label}</span>
+        <span className="file-card-meta">
+          {file.pretty_type} · {formatSize(file.size ?? 0)}
+        </span>
+      </a>
+      <a className="file-card-download" href={href} download={file.name} title="Download">
+        ⬇
+      </a>
+    </div>
+  );
 }
 
 export function Message({
@@ -117,6 +168,14 @@ export function Message({
             {message.subtype === "me_message" && <div className="msg-text me">{mrkdwn(message.text)}</div>}
             <Blocks blocks={message.blocks} ctx={{ onAction }} />
           </>
+        )}
+
+        {message.files && message.files.length > 0 && (
+          <div className="msg-files">
+            {message.files.map((f) => (
+              <FileAttachment key={f.id} file={f} />
+            ))}
+          </div>
         )}
 
         {message.reactions && message.reactions.length > 0 && (

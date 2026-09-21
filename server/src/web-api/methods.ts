@@ -3,8 +3,8 @@ import type { AppConfig } from "../config/schema.ts";
 import type { BotGateway } from "../gateway/bot.ts";
 import type { SocketManager } from "../socket/manager.ts";
 import type { SlackMessage } from "../types.ts";
-import { resolveChannelId } from "../actions.ts";
-import { botId, formatUser, formatChannel } from "./format.ts";
+import { resolveChannelId, postFileShare } from "../actions.ts";
+import { botId, formatUser, formatChannel, formatFile } from "./format.ts";
 import type { Interactions } from "../interactions.ts";
 
 export interface MethodContext {
@@ -292,6 +292,109 @@ export const methods: Record<string, Handler> = {
     store.setReaction(channel, args.timestamp, args.name, app.botUserId, false);
     return ok();
   },
+
+  // ---- files --------------------------------------------------------------
+  // Slack's upload flow, which is what the SDKs' files.uploadV2 / files_upload_v2
+  // drive: reserve a file id and upload_url, POST the bytes there (files/router.ts),
+  // then complete — which is also where it gets shared into a conversation.
+
+  "files.getUploadURLExternal": (args, { store, app }) => {
+    const length = Number(args.length);
+    if (!args.filename || args.length === undefined || !Number.isInteger(length) || length < 0) {
+      return err("invalid_arguments");
+    }
+    const { file, uploadToken } = store.files.create({
+      name: String(args.filename),
+      user: app.botUserId,
+      // The documented name is alt_txt; @slack/web-api sends alt_text.
+      altTxt: args.alt_txt ?? args.alt_text,
+      snippetType: args.snippet_type,
+    });
+    return ok({ upload_url: `${store.runtime.httpBase}/upload/v1/${uploadToken}`, file_id: file.id });
+  },
+
+  "files.completeUploadExternal": (args, { store, app }) => {
+    const entries: any[] = Array.isArray(args.files) ? args.files : [];
+    if (!entries.length) return err("invalid_arguments");
+
+    const files = entries.map((e) => store.files.get(e?.id));
+    for (const [i, f] of files.entries()) {
+      // Only the app that reserved a file can complete it.
+      if (!f || f.deleted || f.user !== app.botUserId) return err("file_not_found");
+      if (!f.path) {
+        store.addLog("internal", "files", `${f.id} completed before its bytes were uploaded`, {
+          hint: "POST the file's content to the upload_url from files.getUploadURLExternal first",
+        });
+        return err("file_not_found");
+      }
+      if (entries[i].title) f.title = String(entries[i].title);
+    }
+
+    // channel_id is one conversation; the newer `channels` takes a comma list.
+    const targets = String(args.channel_id ?? args.channels ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .map((c) => resolveChannelId(store, c, app.botUserId));
+    if (targets.some((c) => !store.channels.has(c))) return err("channel_not_found");
+
+    for (const channel of targets) {
+      postFileShare(store, {
+        channel,
+        files: files as NonNullable<(typeof files)[number]>[],
+        author: { user: app.botUserId, bot_id: botId(app), app_id: app.appId },
+        text: args.initial_comment,
+        blocks: args.blocks,
+        thread_ts: args.thread_ts,
+      });
+    }
+    return ok({ files: files.map((f) => formatFile(store, f!)) });
+  },
+
+  "files.info": (args, { store }) => {
+    const f = store.files.get(args.file);
+    if (f?.deleted) return err("file_deleted");
+    if (!f?.path) return err("file_not_found");
+    return ok({ file: formatFile(store, f), comments: [], response_metadata: { next_cursor: "" } });
+  },
+
+  "files.list": (args, { store }) => {
+    const types = String(args.types ?? "all").split(",");
+    const matchesType = (f: { mimetype: string; filetype: string }) =>
+      types.includes("all") ||
+      (types.includes("images") && f.mimetype.startsWith("image/")) ||
+      (types.includes("pdfs") && f.filetype === "pdf") ||
+      (types.includes("zips") && f.filetype === "zip") ||
+      (types.includes("snippets") && f.mimetype.startsWith("text/"));
+
+    const all = store.files
+      .all()
+      .filter((f) => !args.channel || f.shares.some((s) => s.channel === args.channel))
+      .filter((f) => !args.user || f.user === args.user)
+      .filter(matchesType)
+      .sort((a, b) => b.created - a.created);
+
+    const count = Math.max(1, Number(args.count) || 100);
+    const page = Math.max(1, Number(args.page) || 1);
+    return ok({
+      files: all.slice((page - 1) * count, page * count).map((f) => formatFile(store, f)),
+      paging: { count, total: all.length, page, pages: Math.max(1, Math.ceil(all.length / count)) },
+    });
+  },
+
+  "files.delete": (args, { store, app }) => {
+    const f = store.files.get(args.file);
+    if (!f) return err("file_not_found");
+    if (f.deleted) return err("file_deleted");
+    // A bot token can only delete what that bot uploaded.
+    if (f.user !== app.botUserId) return err("cant_delete_file");
+    store.deleteFile(f);
+    return ok();
+  },
+
+  // Retired by Slack on 2025-11-12 in favor of the flow above. Refused here too,
+  // so a bot still on it finds out now rather than in production.
+  "files.upload": () => err("method_deprecated"),
 
   // ---- emoji ----------------------------------------------------------
   "emoji.list": (_args, { store }) =>

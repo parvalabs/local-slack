@@ -26,6 +26,12 @@ function preview(text: string | undefined, max = 80): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
+/** What a file-only message previews as, since it has no text of its own. */
+function fileNames(message: Message): string {
+  const names = (message.files ?? []).filter((f) => f.name).map((f) => f.name);
+  return names.length ? `📎 ${names.join(", ")}` : "";
+}
+
 /** Turns `:shortcode:`s in the (already truncated) preview into what the message
  *  list shows: the unicode character, or a config-declared custom emoji's image.
  *  emojiChar leaves anything unrecognised as the literal `:name:`. */
@@ -111,7 +117,7 @@ export function NotificationCenter({
                       </span>
                       <span className="notif-time">{formatTime(message.ts)}</span>
                     </span>
-                    <span className="notif-text">{withEmoji(preview(message.text))}</span>
+                    <span className="notif-text">{withEmoji(preview(message.text || fileNames(message)))}</span>
                   </span>
                 </button>
               );

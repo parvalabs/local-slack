@@ -23,7 +23,7 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
 const HELP = `local-slack — a local Slack mock for testing bots/apps
 
 Usage:
-  local-slack --config <path> [--port <n>] [--base-host <host>] [--open]
+  local-slack --config <path> [--port <n>] [--base-host <host>] [--files-dir <dir>] [--open]
 
 Options:
   --config <path>      Path to the workspace config (YAML or JSON). Default: config.yaml
@@ -33,6 +33,8 @@ Options:
                         callbacks. Override this when the bot runs elsewhere
                         (a different pod/container) and can't resolve
                         "localhost" back to this server. Default: localhost
+  --files-dir <dir>    Where uploaded files are stored, kept after exit.
+                        Default: a temp dir, removed on exit
   --open               Open the web UI in your browser on start
   -v, --version        Show the version number
   -h, --help           Show this help
@@ -54,6 +56,7 @@ const args = parseArgs(argv);
 const configPath = typeof args.config === "string" ? args.config : "config.yaml";
 const port = Number(args.port ?? 3000);
 const baseHost = typeof args["base-host"] === "string" ? args["base-host"] : "localhost";
+const filesDir = typeof args["files-dir"] === "string" ? args["files-dir"] : undefined;
 
 let config;
 try {
@@ -63,8 +66,14 @@ try {
   process.exit(1);
 }
 
-const { server } = await startServer({ config, port, baseHost });
+const { server, store } = await startServer({ config, port, baseHost, filesDir });
 const base = `http://${baseHost}:${server.port}`;
+
+// The default files dir is a temp dir that only makes sense for this run. Exit
+// handlers don't fire on a signal unless one is registered, hence the pair.
+process.on("exit", () => store.files.dispose());
+process.on("SIGINT", () => process.exit(130));
+process.on("SIGTERM", () => process.exit(143));
 
 const appLines = config.apps
   .map((a, i) => {
@@ -80,6 +89,7 @@ console.log(`
   ├─ Web UI:        ${base}
   ├─ Web API base:  ${base}/api/   ← set each bot's slackApiUrl to this
   ├─ Control API:   ${base}/_control
+  ├─ Files:         ${store.files.dir}
   └─ Apps:
 ${appLines}
 `);

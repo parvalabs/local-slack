@@ -1,7 +1,7 @@
 import type { HonoRequest } from "hono";
 
 // Fields the Slack WebClient serializes as JSON strings inside a urlencoded body.
-const JSON_FIELDS = ["blocks", "attachments", "view", "metadata"];
+const JSON_FIELDS = ["blocks", "attachments", "view", "metadata", "files"];
 
 /**
  * Parse a Web API request into a flat args object, handling the content types

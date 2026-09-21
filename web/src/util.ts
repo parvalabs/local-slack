@@ -34,3 +34,16 @@ export function formatTime(ts: string): string {
   const d = new Date(seconds * 1000);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+/** Byte count as Slack shows it: "912 B", "14 KB", "3.2 MB". */
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let n = bytes / 1024;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+}

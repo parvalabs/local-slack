@@ -3,7 +3,8 @@ import type { AppConfig } from "./config/schema.ts";
 import type { BotGateway } from "./gateway/bot.ts";
 import type { Interactions } from "./interactions.ts";
 import type { SlackMessage } from "./types.ts";
-import { botId } from "./web-api/format.ts";
+import type { StoredFile } from "./state/files.ts";
+import { botId, formatFile } from "./web-api/format.ts";
 
 /** Resolve a channel reference (id, "#name", "name", or a user id for a DM) to a
  *  channel id. `dmBotUserId` is the bot to open a DM with if `ref` turns out to be
@@ -103,6 +104,100 @@ export async function userPostMessage(
   await fanOutEvent(store, gateway, channel, event);
   await fanOutAppMentions(store, gateway, channel, msg);
   return msg;
+}
+
+/**
+ * Shares files into a channel (or thread) as a single `file_share` message —
+ * the step both a bot's files.completeUploadExternal and a human's upload end
+ * in. Stores the message and records the share on each file; delivering events
+ * is left to the caller, since only human shares fan out.
+ */
+export function postFileShare(
+  store: Store,
+  opts: {
+    channel: string;
+    files: StoredFile[];
+    /** `user`, plus `bot_id`/`app_id` when a bot is the one sharing. */
+    author: Pick<SlackMessage, "user" | "bot_id" | "app_id">;
+    text?: string;
+    blocks?: any[];
+    thread_ts?: string;
+  },
+): SlackMessage {
+  const ts = nextTs();
+  for (const f of opts.files) {
+    f.shares.push({ channel: opts.channel, ts, ...(opts.thread_ts ? { thread_ts: opts.thread_ts } : {}) });
+  }
+  return store.addMessage({
+    type: "message",
+    subtype: "file_share",
+    ts,
+    channel: opts.channel,
+    ...opts.author,
+    text: opts.text ?? "",
+    ...(opts.blocks ? { blocks: opts.blocks } : {}),
+    files: opts.files.map((f) => formatFile(store, f)),
+    upload: true,
+    display_as_bot: false,
+    ...(opts.thread_ts ? { thread_ts: opts.thread_ts } : {}),
+  });
+}
+
+/**
+ * A human uploads files (via the UI or the control API), optionally with a
+ * message. Delivers what Slack does for a user's upload: a `message` event with
+ * subtype `file_share` carrying the files, `app_mention` if the comment names an
+ * app, and one `file_shared` per file.
+ */
+export async function userShareFiles(
+  store: Store,
+  gateway: BotGateway,
+  opts: { channel: string; user: string; text?: string; thread_ts?: string; files: File[] },
+): Promise<{ ok: true; message: SlackMessage } | { ok: false; error: string }> {
+  const channel = resolveChannelId(store, opts.channel, store.primaryApp().botUserId);
+  if (!store.channels.has(channel)) return { ok: false, error: "channel_not_found" };
+  if (!opts.files.length) return { ok: false, error: "no_file_data" };
+
+  const stored: StoredFile[] = [];
+  for (const upload of opts.files) {
+    const { file } = store.files.create({ name: upload.name, user: opts.user });
+    await store.files.write(file, upload);
+    stored.push(file);
+  }
+  const msg = postFileShare(store, {
+    channel,
+    files: stored,
+    author: { user: opts.user },
+    text: opts.text,
+    thread_ts: opts.thread_ts,
+  });
+
+  await fanOutEvent(store, gateway, channel, {
+    type: "message",
+    subtype: "file_share",
+    channel,
+    user: opts.user,
+    text: msg.text,
+    ts: msg.ts,
+    event_ts: msg.ts,
+    channel_type: channelType(store, channel),
+    files: msg.files,
+    upload: true,
+    display_as_bot: false,
+    ...(opts.thread_ts ? { thread_ts: opts.thread_ts } : {}),
+  });
+  await fanOutAppMentions(store, gateway, channel, msg);
+  for (const f of stored) {
+    await fanOutEvent(store, gateway, channel, {
+      type: "file_shared",
+      channel_id: channel,
+      file_id: f.id,
+      user_id: opts.user,
+      file: { id: f.id },
+      event_ts: msg.ts,
+    });
+  }
+  return { ok: true, message: msg };
 }
 
 /** A human adds or removes a reaction on a message from the UI. */

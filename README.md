@@ -16,7 +16,7 @@ https://github.com/user-attachments/assets/bf549b05-0e9d-4152-9984-341c2895a656
 
 ## What it supports
 
-- **Web API** — `auth.test`, `chat.*`, `conversations.*`, `users.*`, `views.*`, `reactions.*`, `emoji.list`, `apps.connections.open`, `team.info`, `bots.info`
+- **Web API** — `auth.test`, `chat.*`, `conversations.*`, `users.*`, `views.*`, `reactions.*`, `files.*`, `emoji.list`, `apps.connections.open`, `team.info`, `bots.info`
 - **Two delivery modes** (per-app config switch):
   - **Socket Mode** — the bot opens a WebSocket (via `apps.connections.open` → `ws://…`)
   - **Events API (HTTP)** — signed POSTs to the bot's request URL (real `x-slack-signature`, so Bolt's verification passes)
@@ -29,6 +29,7 @@ https://github.com/user-attachments/assets/bf549b05-0e9d-4152-9984-341c2895a656
 - **Human-driven reactions, edit, and delete** — react from the UI (delivers `reaction_added`/`reaction_removed`), and edit/delete your own messages (delivers `message_changed`/`message_deleted`); bot messages can't be edited/deleted this way
 - **Multiple apps in one workspace** — declare several apps under `apps:`; each gets its own tokens, delivery mode, Socket Mode connection(s) and Home tab. Channel events fan out to every app that's a member; interactive components (buttons/modals) and slash commands route to the specific app that owns them
 - **@mention and #channel autocomplete** — type `@` or `#` in the composer to pick a user/bot or a channel; both render inline with the same blue/highlight style they'd have once sent, but insert real `<@USER_ID>` / `<#CHANNEL_ID|name>` syntax so the bot receives an actual reference, not literal text. Pick from the menu with Tab/Enter/click, or just type the handle out in full and ignore the menu — it links on space, and again on send, so `@bob`/`#random`/`@your-bot` become real references however you finish typing. Only *exact* handle matches resolve that way: a half-typed `@bo` stays plain text rather than silently linking the wrong person, and an address like `a@b.com` is left alone. Channel references in a rendered message are clickable and jump to that channel's tab
+- **File uploads** — bots upload through Slack's current flow (what `files.uploadV2` / `files_upload_v2` use), and people attach files in the composer by clicking 📎, dragging them in, or pasting. Files are stored on local disk and render inline: images as previews, anything else as a card to open or download. See [Files](#files)
 - **Emoji rendering** — `:shortcode:` in message text and reaction pills render as the actual emoji character; declare custom emoji in the config to render/react with your own images instead
 - **Inspector** — a live view of raw traffic to/from the bot (envelopes, HTTP, acks, Web API calls)
 
@@ -173,6 +174,37 @@ The server validates each image exists at startup and serves it at `/emoji/<name
 `emoji.list` returns each name resolved to a fetchable URL for bots that enumerate a workspace's
 custom emoji.
 
+### Files
+
+Bots upload the way they do against real Slack, so `client.files.uploadV2(...)` (Node) and
+`client.files_upload_v2(...)` (Python) work unchanged:
+
+1. `files.getUploadURLExternal` reserves a file id and an `upload_url` on this server
+2. the SDK POSTs the bytes to that `upload_url`
+3. `files.completeUploadExternal` finishes it, and shares it into `channel_id` (optionally in
+   `thread_ts`, with `initial_comment` or `blocks`) as one `file_share` message
+
+`files.info`, `files.list` (filter by `channel`, `user`, `types`) and `files.delete` are there too. A
+deleted file stays in its messages as a tombstone ("This file was deleted."), and a bot can only
+delete files it uploaded. `files.upload` returns `method_deprecated`: Slack retired it in November 2025.
+
+To read a file, a bot fetches `url_private` or `url_private_download` with
+`Authorization: Bearer <bot token>`. Without the header the request fails with `403` and an entry in
+the Inspector (real Slack returns its sign-in page instead):
+
+```js
+const res = await fetch(file.url_private_download, {
+  headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+});
+```
+
+When a person uploads from the UI or the Control API, each app in the channel receives a `message`
+event with subtype `file_share` and the `files`, then one `file_shared` event per file. If the comment
+mentions an app, that app also receives `app_mention`.
+
+Files are stored in a temp directory that is deleted on exit. Use `--files-dir <dir>` to keep them.
+Resetting the workspace deletes them in both cases.
+
 ### Multiple apps
 
 Replace the singular `app:` with an `apps:` list to run more than one app against the same
@@ -220,7 +252,7 @@ bun run test        # unit tests (config/signing/store/interactions/Web API) + i
 ## CLI
 
 ```
-local-slack --config <path> [--port <n>] [--base-host <host>] [--open]
+local-slack --config <path> [--port <n>] [--base-host <host>] [--files-dir <dir>] [--open]
 ```
 
 | Flag | Description | Default |
@@ -228,6 +260,7 @@ local-slack --config <path> [--port <n>] [--base-host <host>] [--open]
 | `--config` | Path to the workspace config (YAML/JSON) | `config.yaml` |
 | `--port` | Port for the UI + API + WebSockets | `3000` |
 | `--base-host` | Hostname clients use to reach this server — baked into the Socket Mode `ws://` URL and interactive `response_url` callbacks. Override this when the bot runs elsewhere (a different pod/container) and can't resolve `localhost` back to this server | `localhost` |
+| `--files-dir` | Where uploaded files are stored. Kept after exit; the default temp dir isn't | a temp dir |
 | `--open` | Open the web UI in the browser on start | — |
 | `-v`, `--version` | Print the version number and exit | — |
 | `-h`, `--help` | Show help and exit | — |
@@ -241,6 +274,7 @@ Drive the workspace and inspect bot traffic without the UI (base `http://localho
 | POST | `/message` | `{ channel, user, text, thread_ts? }` |
 | POST | `/command` | `{ channel, user, command, text, appId? }` (appId defaults to the first configured app) |
 | POST | `/interact` | `{ channel, messageTs, user, action }` (routes to the message's own app automatically) |
+| POST | `/upload` | multipart: `channel`, `user`, one or more `file` parts, optional `text` / `thread_ts` |
 | POST | `/reaction` | `{ channel, ts, user, name, present? }` (present defaults `true`) |
 | POST | `/edit-message` | `{ channel, ts, user, text }` (only the message's own author may edit) |
 | POST | `/delete-message` | `{ channel, ts, user }` (only the message's own author may delete) |
@@ -254,6 +288,8 @@ Drive the workspace and inspect bot traffic without the UI (base `http://localho
 curl -X POST localhost:3000/_control/message \
   -H 'content-type: application/json' \
   -d '{"channel":"C01GEN","user":"U01ALICE","text":"hello"}'
+curl -X POST localhost:3000/_control/upload \
+  -F channel=C01GEN -F user=U01ALICE -F text='latest numbers' -F file=@report.csv
 curl localhost:3000/_control/log   # assert on what the bot received / sent
 ```
 

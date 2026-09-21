@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Channel, User } from "../types.ts";
-import { avatarColor, initials, userLabel } from "../util.ts";
+import { avatarColor, formatSize, initials, userLabel } from "../util.ts";
 
 type TriggerKind = "user" | "channel";
 
@@ -138,13 +138,13 @@ function renderHighlighted(text: string, spans: RefSpan[]): React.ReactNode[] {
  * rather than carrying it along as you move around.
  *
  * Spans ride along with the text: dropping them would turn already-resolved
- * mentions back into plain "@Name" on restore. Session-only by design — a draft
- * doesn't survive a reload.
+ * mentions back into plain "@Name" on restore. So do attached files. Session-only
+ * by design — a draft doesn't survive a reload.
  *
  * Callers pass `draftKey` *and* use it as React's `key`, so switching
  * conversations remounts the composer and re-seeds state from here.
  */
-const drafts = new Map<string, { text: string; spans: RefSpan[] }>();
+const drafts = new Map<string, { text: string; spans: RefSpan[]; attachments: File[] }>();
 
 export function Composer({
   draftKey,
@@ -155,22 +155,27 @@ export function Composer({
 }: {
   draftKey: string;
   placeholder: string;
-  onSend: (text: string) => void;
+  /** May return a promise (an upload); if it rejects, the message is put back. */
+  onSend: (text: string, attachments: File[]) => void | Promise<void>;
   users?: User[];
   channels?: Channel[];
 }) {
   const [text, setText] = useState(() => drafts.get(draftKey)?.text ?? "");
   const [spans, setSpans] = useState<RefSpan[]>(() => drafts.get(draftKey)?.spans ?? []);
+  const [attachments, setAttachments] = useState<File[]>(() => drafts.get(draftKey)?.attachments ?? []);
   const [trigger, setTrigger] = useState<TriggerQuery | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Also clears the entry once the box is empty, so a sent message doesn't leave
   // a stale draft behind.
   useEffect(() => {
-    if (text) drafts.set(draftKey, { text, spans });
+    if (text || attachments.length) drafts.set(draftKey, { text, spans, attachments });
     else drafts.delete(draftKey);
-  }, [draftKey, text, spans]);
+  }, [draftKey, text, spans, attachments]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
 
   // Grows the textarea to fit its content (capped by the CSS max-height, past
@@ -206,12 +211,27 @@ export function Composer({
 
   const send = () => {
     const trimmed = resolveBareHandles(serialize(text, spans), users, channels).trim();
-    if (!trimmed) return;
-    onSend(trimmed);
+    if (!trimmed && !attachments.length) return;
+    const sent = { text, spans, attachments };
+    const result = onSend(trimmed, attachments);
     setText("");
     setSpans([]);
+    setAttachments([]);
     setTrigger(null);
+    setError(null);
+    result?.catch((e: unknown) => {
+      setError(e instanceof Error ? e.message : String(e));
+      setText(sent.text);
+      setSpans(sent.spans);
+      setAttachments(sent.attachments);
+    });
   };
+
+  const addFiles = (files: FileList | null | undefined) => {
+    if (files?.length) setAttachments((prev) => [...prev, ...Array.from(files)]);
+  };
+  // Only react to drags that carry files, not e.g. selected text being dragged.
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
   const selectCandidate = (c: Candidate) => {
     if (!trigger) return;
@@ -248,7 +268,62 @@ export function Composer({
   };
 
   return (
-    <div className="composer">
+    <div
+      className={`composer ${dragging ? "dragging" : ""}`}
+      onDragOver={(e) => {
+        if (!isFileDrag(e)) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        // dragleave also fires moving between the composer's own children.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        if (!isFileDrag(e)) return;
+        e.preventDefault();
+        setDragging(false);
+        addFiles(e.dataTransfer.files);
+        textareaRef.current?.focus();
+      }}
+    >
+      {error && <div className="composer-error">Couldn't send: {error}</div>}
+      {attachments.length > 0 && (
+        <div className="composer-attachments">
+          {attachments.map((f, i) => (
+            <span key={`${i}:${f.name}`} className="composer-attachment" title={f.name}>
+              <span aria-hidden="true">{f.type.startsWith("image/") ? "🖼️" : "📄"}</span>
+              <span className="composer-attachment-name">{f.name}</span>
+              <span className="composer-attachment-size">{formatSize(f.size)}</span>
+              <button
+                className="composer-attachment-remove"
+                aria-label={`Remove ${f.name}`}
+                onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          addFiles(e.target.files);
+          e.target.value = ""; // so picking the same file again still fires onChange
+        }}
+      />
+      <button
+        className="composer-attach"
+        title="Attach files"
+        aria-label="Attach files"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        📎
+      </button>
       {trigger && matches.length > 0 && (
         <div className="mention-list">
           {matches.map((c, i) => (
@@ -290,6 +365,14 @@ export function Composer({
           placeholder={placeholder}
           rows={1}
           onChange={onChange}
+          onPaste={(e) => {
+            // A pasted screenshot or copied file arrives as clipboard files; keep
+            // it from also pasting its name as text.
+            if (e.clipboardData.files.length) {
+              e.preventDefault();
+              addFiles(e.clipboardData.files);
+            }
+          }}
           onScroll={(e) => {
             if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop;
           }}
@@ -340,7 +423,7 @@ export function Composer({
           onBlur={() => setTrigger(null)}
         />
       </div>
-      <button className="composer-send" onClick={send} disabled={!text.trim()}>
+      <button className="composer-send" onClick={send} disabled={!text.trim() && !attachments.length}>
         Send
       </button>
     </div>

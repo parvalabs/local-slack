@@ -16,6 +16,13 @@ export interface SlackMessage {
   subtype?: string;
   edited?: { user: string; ts: string };
   reactions?: { name: string; users: string[]; count: number }[];
+  /** Slack file objects (see formatFile), snapshotted when shared. A deleted
+   *  file becomes `{ id, mode: "tombstone" }`. */
+  files?: any[];
+  /** True when the files arrived with this message, as opposed to being
+   *  re-shared from elsewhere. */
+  upload?: boolean;
+  display_as_bot?: boolean;
 }
 
 export type LogDirection = "to_bot" | "from_bot" | "internal";

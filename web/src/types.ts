@@ -21,6 +21,21 @@ export interface Reaction {
   count: number;
 }
 
+/** Slack's file object — only the fields the UI reads. A deleted file is left
+ *  in its message as `{ id, mode: "tombstone" }`. */
+export interface SlackFile {
+  id: string;
+  mode?: string;
+  name?: string;
+  title?: string;
+  mimetype?: string;
+  filetype?: string;
+  pretty_type?: string;
+  size?: number;
+  permalink?: string;
+  alt_txt?: string;
+}
+
 export interface Message {
   ts: string;
   channel: string;
@@ -34,6 +49,7 @@ export interface Message {
   ephemeral_to?: string;
   reactions?: Reaction[];
   edited?: { user: string; ts: string };
+  files?: SlackFile[];
 }
 
 export interface AppInfo {

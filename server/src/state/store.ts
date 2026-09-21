@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { Config, UserConfig, ChannelConfig, AppConfig } from "../config/schema.ts";
 import type { LogEntry, LogDirection, SlackMessage } from "../types.ts";
+import { FileStore, type StoredFile } from "./files.ts";
 
 let tsSeq = 0;
 /** Slack-style message timestamp: `seconds.microseconds`, monotonic within a run. */
@@ -28,6 +29,7 @@ function shortId(prefix: string): string {
  *   "log"          (LogEntry)       — traffic to/from the bot (for the Inspector)
  *   "view"         ({action,view})  — modal opened/updated/pushed/closed (M2)
  *   "home"         ({user,view})    — App Home published (M3)
+ *   "message_update" is also emitted for each message a deleted file was in
  */
 export class Store extends EventEmitter {
   readonly config: Config;
@@ -35,6 +37,7 @@ export class Store extends EventEmitter {
   readonly channels = new Map<string, ChannelConfig>();
   readonly messages = new Map<string, SlackMessage[]>(); // channelId -> messages
   readonly homeViews = new Map<string, Map<string, any>>(); // userId -> appId -> published home view
+  readonly files: FileStore;
   readonly log: LogEntry[] = [];
 
   /** The active modal stack (top = currently shown). Slack shows one modal stack per user;
@@ -44,10 +47,13 @@ export class Store extends EventEmitter {
   /** Filled in once the server is listening (used to build the Socket Mode URL). */
   runtime: { httpBase: string; wsBase: string } = { httpBase: "", wsBase: "" };
 
-  constructor(config: Config) {
+  /** `filesDir` is where uploaded bytes go; omitted, a temp dir is created on
+   *  first upload and removed by `files.dispose()`. */
+  constructor(config: Config, opts: { filesDir?: string } = {}) {
     super();
     this.setMaxListeners(0);
     this.config = config;
+    this.files = new FileStore(shortId, opts.filesDir);
     for (const u of config.users) this.users.set(u.id, u);
     for (const c of config.channels) {
       this.channels.set(c.id, c);
@@ -179,6 +185,19 @@ export class Store extends EventEmitter {
     return msg;
   }
 
+  /** Deletes a file and swaps it for a tombstone in every message it was shared
+   *  in, which is how Slack represents a deleted file that a message still
+   *  references (the UI shows "This file was deleted."). */
+  deleteFile(file: StoredFile): void {
+    this.files.remove(file);
+    for (const share of file.shares) {
+      const msg = this.findMessage(share.channel, share.ts);
+      if (!msg?.files) continue;
+      msg.files = msg.files.map((f) => (f.id === file.id ? { id: file.id, mode: "tombstone" } : f));
+      this.emit("message_update", msg);
+    }
+  }
+
   /** Find or create a direct-message channel between a user and a specific bot. */
   openDm(userId: string, botUserId: string): ChannelConfig {
     for (const c of this.channels.values()) {
@@ -274,13 +293,14 @@ export class Store extends EventEmitter {
   }
 
   /** Restore the workspace to its config baseline: clear messages, log, modals,
-   *  home views and any dynamically-created channels (DMs). */
+   *  home views, uploaded files and any dynamically-created channels (DMs). */
   reset() {
     this.messages.clear();
     this.channels.clear();
     this.homeViews.clear();
     this.modalStack = [];
     this.log.length = 0;
+    this.files.clear();
     for (const c of this.config.channels) {
       this.channels.set(c.id, c);
       this.messages.set(c.id, []);

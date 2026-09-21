@@ -234,6 +234,27 @@ export function postMessage(channel: string, user: string, text: string, thread_
   ws?.send(JSON.stringify({ t: "post_message", channel, user, text, thread_ts }));
 }
 
+/** Uploads files as `user`, with an optional message. Over HTTP rather than
+ *  the socket, since it carries bytes; the resulting message arrives back over
+ *  the socket like any other. */
+export async function uploadFiles(
+  channel: string,
+  user: string,
+  text: string,
+  files: File[],
+  thread_ts?: string,
+): Promise<void> {
+  const form = new FormData();
+  form.append("channel", channel);
+  form.append("user", user);
+  if (text) form.append("text", text);
+  if (thread_ts) form.append("thread_ts", thread_ts);
+  for (const f of files) form.append("file", f);
+  const res = await fetch("/_control/upload", { method: "POST", body: form });
+  const body = await res.json().catch(() => ({}));
+  if (!body.ok) throw new Error(body.error ?? `upload failed (HTTP ${res.status})`);
+}
+
 export function sendBlockAction(
   channel: string,
   messageTs: string,

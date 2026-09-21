@@ -5,6 +5,7 @@ import {
   markThreadRead,
   openHome,
   postMessage,
+  uploadFiles,
   sendSlashCommand,
   setSelfUserId,
   toggleSound,
@@ -245,8 +246,10 @@ export function App() {
     return () => clearTimeout(timer);
   }, [highlightTs, selectedId]);
 
-  const send = (text: string) => {
+  const send = (text: string, attachments: File[]) => {
     if (!selectedId || !actingUser) return;
+    // Text sent with files is the upload's comment, even if it looks like a command.
+    if (attachments.length) return uploadFiles(selectedId, actingUser, text, attachments);
     if (text.startsWith("/")) {
       const sp = text.indexOf(" ");
       const command = sp === -1 ? text : text.slice(0, sp);

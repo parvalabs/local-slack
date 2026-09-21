@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Channel, Message as Msg, User } from "../types.ts";
 import { Message } from "./Message.tsx";
 import { Composer } from "./Composer.tsx";
-import { postMessage, sendSlashCommand } from "../client.ts";
+import { postMessage, sendSlashCommand, uploadFiles } from "../client.ts";
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 900;
@@ -64,8 +64,10 @@ export function ThreadPane({
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [replies.length, root.ts]);
 
-  const send = (text: string) => {
+  const send = (text: string, attachments: File[]) => {
     if (!actingUser) return;
+    // Text sent with files is the upload's comment, even if it looks like a command.
+    if (attachments.length) return uploadFiles(channelId, actingUser, text, attachments, root.ts);
     if (text.startsWith("/")) {
       const sp = text.indexOf(" ");
       const command = sp === -1 ? text : text.slice(0, sp);
