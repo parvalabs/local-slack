@@ -200,7 +200,8 @@ const res = await fetch(file.url_private_download, {
 
 When a person uploads from the UI or the Control API, each app in the channel receives a `message`
 event with subtype `file_share` and the `files`, then one `file_shared` event per file. If the comment
-mentions an app, that app also receives `app_mention`.
+mentions an app, that app also receives `app_mention`. A bot's own uploads deliver no events, like
+everything else a bot does (see [routing rules](#multiple-apps)).
 
 Files are stored in a temp directory that is deleted on exit. Use `--files-dir <dir>` to keep them.
 Resetting the workspace deletes them in both cases.
@@ -208,7 +209,7 @@ Resetting the workspace deletes them in both cases.
 ### Multiple apps
 
 Replace the singular `app:` with an `apps:` list to run more than one app against the same
-workspace at once — e.g. testing bot-to-bot interaction, or exercising two separate apps together.
+workspace at once — e.g. exercising two separate apps together in the same channels.
 Every app needs a unique `appId`, `botUserId` and `botToken`. See
 [`examples/config.multiapp.yaml`](examples/config.multiapp.yaml) (paired with
 [`examples/echo-bot`](examples/echo-bot) and [`examples/shout-bot`](examples/shout-bot)).
@@ -232,8 +233,11 @@ channels:
 ```
 
 Routing rules (matching real Slack as closely as this mock reasonably can):
-- **Channel events** (messages, reactions, edits, deletes) fan out to every app whose bot is a
-  member of the channel.
+- **Channel events** (messages, reactions, edits, deletes, file shares) fan out to every app whose
+  bot is a member of the channel.
+- **Only people's actions deliver events.** What a bot does through the Web API (posting, reacting,
+  uploading) is stored and shown, but isn't delivered to any app — including other apps in the
+  channel, which real Slack would notify. So one bot's messages can't trigger another here.
 - **Interactive components** (buttons, modals) route to whichever app posted the message or opened
   the view — inferred automatically, no configuration needed.
 - **Slash commands** and **opening a Home tab** target one specific app, since this mock doesn't
