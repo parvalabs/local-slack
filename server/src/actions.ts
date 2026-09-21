@@ -42,12 +42,16 @@ function appFor(store: Store, appId: string | undefined): AppConfig {
  * named — unlike `message`, which fans out to every app in the channel. Mentions of
  * an app that isn't in the channel are ignored, matching Slack: it can't see the
  * conversation, so it can't be mentioned in it.
+ *
+ * A mention in an upload's comment carries the files too, as in Slack — a bot that
+ * only listens for app_mention ("@bot summarize this") would otherwise never see
+ * what it was asked about.
  */
 async function fanOutAppMentions(
   store: Store,
   gateway: BotGateway,
   channel: string,
-  msg: { user?: string; text?: string; ts: string; thread_ts?: string },
+  msg: Pick<SlackMessage, "user" | "text" | "ts" | "thread_ts" | "files" | "upload" | "display_as_bot">,
 ): Promise<void> {
   const mentioned = new Set([...(msg.text ?? "").matchAll(/<@([A-Z0-9]+)>/g)].map((m) => m[1]));
   if (!mentioned.size) return;
@@ -63,6 +67,7 @@ async function fanOutAppMentions(
         channel,
         event_ts: msg.ts,
         ...(msg.thread_ts ? { thread_ts: msg.thread_ts } : {}),
+        ...(msg.files ? { files: msg.files, upload: msg.upload, display_as_bot: msg.display_as_bot } : {}),
       }),
     ),
   );

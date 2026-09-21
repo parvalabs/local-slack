@@ -200,7 +200,7 @@ const res = await fetch(file.url_private_download, {
 
 When a person uploads from the UI or the Control API, each app in the channel receives a `message`
 event with subtype `file_share` and the `files`, then one `file_shared` event per file. If the comment
-mentions an app, that app also receives `app_mention`. A bot's own uploads deliver no events, like
+mentions an app, that app also receives `app_mention`, carrying the same `files`. A bot's own uploads deliver no events, like
 everything else a bot does (see [routing rules](#multiple-apps)).
 
 Files are stored in a temp directory that is deleted on exit. Use `--files-dir <dir>` to keep them.
@@ -292,8 +292,9 @@ Drive the workspace and inspect bot traffic without the UI (base `http://localho
 curl -X POST localhost:3000/_control/message \
   -H 'content-type: application/json' \
   -d '{"channel":"C01GEN","user":"U01ALICE","text":"hello"}'
+# --form-string for text: with -F, a value starting with "<" (like a mention) is read as a file path
 curl -X POST localhost:3000/_control/upload \
-  -F channel=C01GEN -F user=U01ALICE -F text='latest numbers' -F file=@report.csv
+  -F channel=C01GEN -F user=U01ALICE --form-string 'text=<@U0BOT> summarize this' -F file=@report.csv
 curl localhost:3000/_control/log   # assert on what the bot received / sent
 ```
 

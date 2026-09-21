@@ -9,7 +9,7 @@ import { controlRouter } from "../src/control/router.ts";
 import { Interactions } from "../src/interactions.ts";
 import { SocketManager } from "../src/socket/manager.ts";
 import { Store } from "../src/state/store.ts";
-import { userShareFiles } from "../src/actions.ts";
+import { userPostMessage, userShareFiles } from "../src/actions.ts";
 import { makeConfig, makeStore, makeGatewayStub } from "./helpers.ts";
 import { json } from "./ws-helpers.ts";
 
@@ -329,17 +329,40 @@ describe("human uploads", () => {
     });
   });
 
-  test("a comment that mentions the app also delivers app_mention", async () => {
+  test("a comment that mentions the app also delivers app_mention, carrying the files", async () => {
     const store = makeStore();
     stores.push(store);
     const { gateway, calls } = makeGatewayStub();
-    await userShareFiles(store, gateway, {
+    const res = await userShareFiles(store, gateway, {
       channel: "C01GEN",
       user: "U01ALICE",
       text: "<@U0BOT> summarize this",
       files: [new File(["abc"], "a.txt")],
     });
     expect(calls.map((c) => (c.payload as any).type)).toEqual(["message", "app_mention", "file_shared"]);
+
+    const fileId = res.ok ? res.message.files![0].id : "";
+    const mention = calls[1].payload as any;
+    expect(mention).toMatchObject({
+      type: "app_mention",
+      user: "U01ALICE",
+      text: "<@U0BOT> summarize this",
+      upload: true,
+      files: [{ id: fileId, name: "a.txt", size: 3 }],
+    });
+    // Same file objects as the message event, so either handler can download it.
+    expect(mention.files).toEqual((calls[0].payload as any).files);
+    expect(mention.files[0].url_private_download).toContain(fileId);
+  });
+
+  test("a plain mention, with no upload, carries no files", async () => {
+    const store = makeStore();
+    stores.push(store);
+    const { gateway, calls } = makeGatewayStub();
+    await userPostMessage(store, gateway, { channel: "C01GEN", user: "U01ALICE", text: "<@U0BOT> hi" });
+    const mention = calls.find((c) => (c.payload as any).type === "app_mention")!.payload as any;
+    expect(mention).not.toHaveProperty("files");
+    expect(mention).not.toHaveProperty("upload");
   });
 
   test("the control API takes a multipart upload, into a thread", async () => {
