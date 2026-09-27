@@ -127,6 +127,21 @@ jobs:
           security default-keychain -s "$KEYCHAIN"
           rm -f "$RUNNER_TEMP/cert.p12"
 
+          # Check the import produced something signable, and that it's the
+          # identity we were told to use. `security import` happily succeeds on
+          # a .p12 holding only a certificate, and codesign then fails much
+          # later with a bare "no identity found" that says nothing about why.
+          IDENTITIES=$(security find-identity -v -p codesigning "$KEYCHAIN")
+          echo "$IDENTITIES" | tail -1
+          if echo "$IDENTITIES" | grep -q "0 valid identities found"; then
+            echo "::error::The .p12 imported but holds no usable signing identity — its private key is missing. In Keychain Access, export from *My Certificates* (expand the certificate and confirm a key is nested under it), not from Certificates."
+            exit 1
+          fi
+          if ! echo "$IDENTITIES" | grep -qF "$APPLE_SIGNING_IDENTITY"; then
+            echo "::error::APPLE_SIGNING_IDENTITY doesn't match any identity in the .p12. It must read exactly as \`security find-identity -v -p codesigning\` prints it locally, e.g. \"Developer ID Application: Name (TEAMID)\"."
+            exit 1
+          fi
+
       - name: Build and sign the binaries
         run: bun run build:binaries
 
