@@ -51,6 +51,12 @@ jobs:
     # the Linux and Windows binaries from here, exactly as a local build does.
     runs-on: macos-latest
     timeout-minutes: 45
+    env:
+      # Step-level `if:` can't read the `secrets` context — GitHub rejects the
+      # whole workflow file if it tries — so the identity is surfaced here and
+      # the signing steps key off `env` instead. It also reaches the build step
+      # as the variable build-binaries.ts reads.
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,11 +101,11 @@ jobs:
       # the certificate is still being sorted out. The warning below is what
       # keeps that from passing unnoticed.
       - name: Warn when Apple signing is not configured
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY == '' }}
+        if: ${{ env.APPLE_SIGNING_IDENTITY == '' }}
         run: echo "::warning::APPLE_SIGNING_IDENTITY is not set — shipping ad-hoc signed macOS binaries, which Gatekeeper will warn about on download."
 
       - name: Import the signing certificate
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+        if: ${{ env.APPLE_SIGNING_IDENTITY != '' }}
         env:
           APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -122,12 +128,10 @@ jobs:
           rm -f "$RUNNER_TEMP/cert.p12"
 
       - name: Build and sign the binaries
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: bun run build:binaries
 
       - name: Verify the macOS binaries are really Developer ID signed
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+        if: ${{ env.APPLE_SIGNING_IDENTITY != '' }}
         run: |
           for arch in arm64 x64; do
             BIN="npm/local-slack-darwin-$arch/bin/local-slack"
@@ -148,7 +152,7 @@ jobs:
           done
 
       - name: Notarize
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+        if: ${{ env.APPLE_SIGNING_IDENTITY != '' }}
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -172,7 +176,7 @@ jobs:
         run: echo "::notice::Built, signed and notarized $VERSION without publishing. The signing secrets work."
 
       - name: Remove the signing keychain
-        if: ${{ always() && secrets.APPLE_SIGNING_IDENTITY != '' }}
+        if: ${{ always() && env.APPLE_SIGNING_IDENTITY != '' }}
         run: |
           security list-keychains -d user -s login.keychain-db || true
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
