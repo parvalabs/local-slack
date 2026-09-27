@@ -20,9 +20,14 @@
 #   APPLE_API_ISSUER_ID     that key's issuer UUID - set it for a Team key, and
 #                           leave it unset for an Individual key, which
 #                           notarytool refuses to take an issuer for
-#   NPM_TOKEN               npm Automation token (bypasses 2FA; a Publish token would prompt)
 #   HOMEBREW_TAP_TOKEN      PAT with contents:write on parvalabs/homebrew-tools
 # GITHUB_TOKEN is provided automatically and only needs the contents permission below.
+#
+# npm needs no token: it authenticates by trusted publishing (OIDC), which npm
+# now recommends over tokens — classic tokens were revoked in December 2025, and
+# granular ones are capped at 90 days. Each of the six packages carries its own
+# trusted publisher entry on npmjs.com naming this repo and this file, so
+# RENAMING THIS FILE BREAKS PUBLISHING until those entries are updated to match.
 name: Release
 
 on:
@@ -40,6 +45,7 @@ on:
 
 permissions:
   contents: write # create the GitHub release and upload its archives
+  id-token: write # mint the OIDC token npm trusted publishing authenticates with
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -67,10 +73,17 @@ jobs:
           bun-version: latest
 
       # Only for the npm auth it writes into ~/.npmrc — the build itself is Bun.
+      # Node 22.14+ and npm 11.5.1+ are what trusted publishing requires; the npm
+      # bundled with Node 22 is 10.x, hence the upgrade.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -180,7 +193,6 @@ jobs:
       - name: Publish to npm, GitHub Releases and the Homebrew tap
         if: ${{ github.event_name == 'push' || inputs.publish }}
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # consumed by ~/.npmrc from setup-node
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # used by `gh release create`
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           HOMEBREW_TAP_DIR: ${{ runner.temp }}/homebrew-tools

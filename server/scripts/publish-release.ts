@@ -10,7 +10,6 @@
 //   DRY_RUN=1            print every command instead of running it
 //   HOMEBREW_TAP_DIR     where to clone/find the tap (default: ~/Projects/homebrew-tools)
 //   HOMEBREW_TAP_TOKEN   push to the tap over HTTPS instead of the local gh/ssh auth
-//   NPM_PROVENANCE=1     publish with --provenance (needs CI OIDC; see the workflow)
 //   CI                   commit to the tap as github-actions[bot], which has no git identity
 // The tag is created only when it doesn't already exist, so a CI run triggered
 // *by* that tag skips the step rather than failing on it.
@@ -106,10 +105,10 @@ const tag = `v${version}`;
 
 // 1. Publish npm packages: platform packages first, so the wrapper's
 //    optionalDependencies resolve once it's published right after.
-// --provenance attaches a signed attestation linking the package to the
-// workflow run that built it. It needs the OIDC token only CI has, so it's
-// opt-in rather than something that would break local publishing.
-const npmPublish = ["npm", "publish", ...(process.env.NPM_PROVENANCE === "1" ? ["--provenance"] : [])];
+// No token and no --provenance: from CI these publish over trusted publishing
+// (OIDC), which authenticates by workflow identity and attaches provenance on
+// its own. Run by hand, it's whatever `npm whoami` is already logged in as.
+const npmPublish = ["npm", "publish"];
 
 // Every step below skips work that's already done, so this is safe to re-run:
 // after a half-finished release (one registry accepted, the next failed), and

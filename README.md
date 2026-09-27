@@ -411,11 +411,27 @@ warning, using ad-hoc signed macOS binaries:
 | `APPLE_API_KEY_P8_BASE64` | App Store Connect API key (`.p8`), base64'd — notarization |
 | `APPLE_API_KEY_ID` | that key's ID |
 | `APPLE_API_ISSUER_ID` | that key's issuer UUID — for a **Team** key. Leave unset for an **Individual** key: `notarytool` rejects an issuer for those |
-| `NPM_TOKEN` | npm **Automation** token (a Publish token prompts for 2FA and the run hangs) |
 | `HOMEBREW_TAP_TOKEN` | PAT with `contents:write` on the tap repo |
 
 `GITHUB_TOKEN` is provided automatically. Signing and notarization only work on a macOS runner:
 `codesign` and `notarytool` are macOS-only tools.
+
+**npm needs no secret.** Publishing authenticates by
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), which is npm's replacement
+for tokens — classic tokens were revoked in December 2025, and granular ones are capped at 90 days.
+Each of the six packages needs its own trusted publisher entry, once, on npmjs.com → the package →
+Settings → Trusted publisher → GitHub Actions:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `parvalabs` |
+| Repository | `local-slack` |
+| Workflow filename | `release.yml` |
+
+Those fields are case-sensitive and exact, so **renaming the workflow file breaks publishing** until
+every entry is updated. Provenance attestations are generated automatically as a result, with no
+`--provenance` flag. Publishing by hand instead uses whatever account `npm whoami` reports, and will
+prompt for 2FA.
 
 To check the Apple secrets without releasing anything, run the workflow manually
 (Actions → Release → Run workflow) and leave "Also publish" off: it builds, signs and notarizes
