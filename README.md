@@ -417,6 +417,10 @@ warning, using ad-hoc signed macOS binaries:
 `GITHUB_TOKEN` is provided automatically. Signing and notarization only work on a macOS runner:
 `codesign` and `notarytool` are macOS-only tools.
 
+To check the Apple secrets without releasing anything, run the workflow manually
+(Actions → Release → Run workflow) and leave "Also publish" off: it builds, signs and notarizes
+the committed version, then stops.
+
 ## Architecture
 
 - **Runtime:** Bun. **HTTP:** Hono (runtime-agnostic). **WebSockets:** `Bun.serve` native.

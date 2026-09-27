@@ -28,6 +28,15 @@ name: Release
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  # Run it by hand to check the signing setup — builds, signs and notarizes the
+  # current version without publishing, which is the only way to test the Apple
+  # secrets short of cutting a real release.
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also publish to npm, GitHub Releases and Homebrew"
+        type: boolean
+        default: false
 
 permissions:
   contents: write # create the GitHub release and upload its archives
@@ -60,13 +69,21 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check the tag matches the version in the source
+      - name: Work out the version being released
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           EMBEDDED=$(grep -o 'VERSION = "[^"]*"' server/src/version.ts | cut -d'"' -f2 || true)
-          if [ "$VERSION" != "$EMBEDDED" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match server/src/version.ts ($EMBEDDED). Run release:prepare $VERSION and commit before tagging."
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            # A tagged release: the tag is the source of truth, and disagreeing
+            # with the committed version means the bump never made it in.
+            VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$VERSION" != "$EMBEDDED" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME doesn't match server/src/version.ts ($EMBEDDED). Run release:prepare $VERSION and commit before tagging."
+              exit 1
+            fi
+          else
+            # Manual run: there's no tag, so take whatever is committed.
+            VERSION="$EMBEDDED"
+            echo "::notice::Manual run at version $VERSION"
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
@@ -142,12 +159,17 @@ jobs:
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Publish to npm, GitHub Releases and the Homebrew tap
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # consumed by ~/.npmrc from setup-node
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # used by `gh release create`
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           HOMEBREW_TAP_DIR: ${{ runner.temp }}/homebrew-tools
         run: bun run server/scripts/publish-release.ts "$VERSION"
+
+      - name: Report what a non-publishing run proved
+        if: ${{ github.event_name != 'push' && !inputs.publish }}
+        run: echo "::notice::Built, signed and notarized $VERSION without publishing. The signing secrets work."
 
       - name: Remove the signing keychain
         if: ${{ always() && secrets.APPLE_SIGNING_IDENTITY != '' }}
