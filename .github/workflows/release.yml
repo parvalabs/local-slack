@@ -17,7 +17,9 @@
 #   APPLE_SIGNING_IDENTITY  e.g. "Developer ID Application: Parva Labs LLC (TEAMID)"
 #   APPLE_API_KEY_P8_BASE64 App Store Connect API key (.p8), base64'd, for notarization
 #   APPLE_API_KEY_ID        that key's ID
-#   APPLE_API_ISSUER_ID     that key's issuer UUID
+#   APPLE_API_ISSUER_ID     that key's issuer UUID - set it for a Team key, and
+#                           leave it unset for an Individual key, which
+#                           notarytool refuses to take an issuer for
 #   NPM_TOKEN               npm Automation token (bypasses 2FA; a Publish token would prompt)
 #   HOMEBREW_TAP_TOKEN      PAT with contents:write on parvalabs/homebrew-tools
 # GITHUB_TOKEN is provided automatically and only needs the contents permission below.

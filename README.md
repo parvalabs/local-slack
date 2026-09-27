@@ -409,7 +409,8 @@ warning, using ad-hoc signed macOS binaries:
 | `APPLE_CERT_PASSWORD` | the password set when exporting that `.p12` |
 | `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Your Company LLC (TEAMID)` |
 | `APPLE_API_KEY_P8_BASE64` | App Store Connect API key (`.p8`), base64'd — notarization |
-| `APPLE_API_KEY_ID` / `APPLE_API_ISSUER_ID` | that key's ID and issuer UUID |
+| `APPLE_API_KEY_ID` | that key's ID |
+| `APPLE_API_ISSUER_ID` | that key's issuer UUID — for a **Team** key. Leave unset for an **Individual** key: `notarytool` rejects an issuer for those |
 | `NPM_TOKEN` | npm **Automation** token (a Publish token prompts for 2FA and the run hangs) |
 | `HOMEBREW_TAP_TOKEN` | PAT with `contents:write` on the tap repo |
 

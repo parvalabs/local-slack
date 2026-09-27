@@ -20,7 +20,9 @@
 // Credentials come from an App Store Connect API key, via the environment:
 //   APPLE_API_KEY_PATH   path to the .p8 private key file
 //   APPLE_API_KEY_ID     the key's ID
-//   APPLE_API_ISSUER_ID  the issuer UUID
+//   APPLE_API_ISSUER_ID  the issuer UUID - required for a Team key, and left
+//                        unset for an Individual key, which notarytool rejects
+//                        it for ("Do not provide for Individual API Keys")
 //
 // Usage: bun run server/scripts/notarize-macos.ts
 import { join } from "node:path";
@@ -35,13 +37,15 @@ const BINARIES = ["local-slack-darwin-arm64", "local-slack-darwin-x64"].map((suf
 const keyPath = process.env.APPLE_API_KEY_PATH;
 const keyId = process.env.APPLE_API_KEY_ID;
 const issuerId = process.env.APPLE_API_ISSUER_ID;
-if (!keyPath || !keyId || !issuerId) {
+if (!keyPath || !keyId) {
   console.error(
-    "Missing notarization credentials. Set APPLE_API_KEY_PATH, APPLE_API_KEY_ID and\n" +
-      "APPLE_API_ISSUER_ID (an App Store Connect API key with the Developer role).",
+    "Missing notarization credentials. Set APPLE_API_KEY_PATH and APPLE_API_KEY_ID\n" +
+      "(an App Store Connect API key with the Developer role), plus APPLE_API_ISSUER_ID\n" +
+      "if it's a Team key.",
   );
   process.exit(1);
 }
+const credentials = ["--key", keyPath, "--key-id", keyId, ...(issuerId ? ["--issuer", issuerId] : [])];
 
 async function run(cmd: string[]): Promise<void> {
   const proc = Bun.spawn(cmd, { cwd: root, stdout: "inherit", stderr: "inherit" });
@@ -89,7 +93,6 @@ try {
     // The status is checked rather than trusted to the exit code: `notarytool
     // submit --wait` can exit 0 having finished as "Invalid", which would
     // otherwise publish an unnotarized binary as if all was well.
-    const credentials = ["--key", keyPath, "--key-id", keyId, "--issuer", issuerId];
     const raw = await output([
       "xcrun",
       "notarytool",

@@ -45,8 +45,16 @@ async function run(cmd: string[], cwd: string) {
 
 const only = process.argv[2]; // optional: build just one target, e.g. "bun-darwin-arm64"
 
-// A Developer ID identity, e.g. "Developer ID Application: Parva Labs LLC (TEAMID)".
+// A Developer ID identity, e.g. "Developer ID Application: Your Name (TEAMID)".
 // Unset (local builds) means ad-hoc signing.
+//
+// entitlements.plist grants the two things JavaScriptCore's JIT needs under the
+// hardened runtime that notarization requires: allow-jit (the MAP_JIT pages it
+// allocates) and allow-unsigned-executable-memory (the code it writes into
+// them). Signing without them succeeds and produces a binary that crashes on
+// launch. Keep that file free of XML comments, however valid they look to
+// plutil: codesign parses entitlements with AMFI, which rejects them outright
+// ("AMFIUnserializeXML: syntax error").
 const identity = process.env.APPLE_SIGNING_IDENTITY;
 const ENTITLEMENTS = join(import.meta.dir, "entitlements.plist");
 if (identity) console.log(`Signing macOS binaries as: ${identity}`);
