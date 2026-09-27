@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for Developer ID signing (see build-binaries.ts).
+
+  Notarization requires the hardened runtime, which blocks writable-executable
+  memory by default — and that is exactly what JavaScriptCore's JIT needs. A
+  Bun binary signed with `--options runtime` and no entitlements builds and
+  signs fine, then crashes on launch, so these are not optional:
+
+    allow-jit ....................... the MAP_JIT pages JSC allocates
+    allow-unsigned-executable-memory  code JSC writes into those pages
+
+  Both are standard for JS runtimes shipped this way (Bun, Node SEA, Electron).
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+  </dict>
+</plist>

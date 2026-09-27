@@ -336,10 +336,19 @@ script directly: `bun scripts/build-binaries.ts bun-darwin-arm64` (run from `ser
 
 #### macOS: Gatekeeper
 
-These binaries aren't notarized (that needs a paid Apple Developer account) — ad-hoc signing avoids
-an outright "is damaged" refusal for a locally-built or `curl`-downloaded binary, but a **browser
-download** gets an extra `com.apple.quarantine` tag that Gatekeeper still rejects even when signed.
-Two ways around it:
+Released binaries are Developer ID signed and notarized by the release workflow, so a browser
+download opens without the "unidentified developer" warning. Two caveats:
+
+- **The ticket isn't stapled.** `stapler` only attaches one to a bundle, disk image or installer
+  package, never to a bare executable, so Gatekeeper looks it up online the first time a quarantined
+  copy runs. On a machine with no network, that check fails and the warning comes back. Stapling
+  would mean shipping macOS as a `.dmg`/`.pkg` rather than a tarball.
+- **Locally built binaries are ad-hoc signed**, as are releases built before the signing secrets
+  were configured. Ad-hoc signing avoids an outright "is damaged" refusal for a locally-built or
+  `curl`-downloaded binary, but a **browser download** gets an extra `com.apple.quarantine` tag that
+  Gatekeeper rejects even when signed.
+
+For either case:
 
 ```bash
 # Recommended: curl never sets the quarantine flag, so this just works.
@@ -368,12 +377,44 @@ matching version numbers:
 ```bash
 bun run release:prepare 0.2.0   # bumps the version everywhere, rebuilds every binary + npm
                                  # package, prints checksums to review
-bun run release:publish 0.2.0   # npm publish x6, git tag + GitHub release, Homebrew tap update
+git commit -am "Bump to v0.2.0" && git push
+git tag v0.2.0 && git push origin v0.2.0   # publishes, via CI (see below)
 ```
 
-See [`server/scripts/prepare-release.ts`](server/scripts/prepare-release.ts) and
-[`server/scripts/publish-release.ts`](server/scripts/publish-release.ts) for exactly what each
-step does.
+Pushing the tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
+every binary on a macOS runner, signs and notarizes the macOS ones, then publishes: npm ×6, the
+GitHub release with the archives attached, and the Homebrew formula bump. The split is the same
+confirmation checkpoint as before — `release:prepare` is local and reviewable, and the tag is what
+says "go".
+
+Publishing by hand still works, and is the fallback when CI is unavailable:
+
+```bash
+bun run release:publish 0.2.0              # same script the workflow runs
+DRY_RUN=1 bun run release:publish 0.2.0    # print every step, change nothing
+```
+
+Either way it's [`server/scripts/publish-release.ts`](server/scripts/publish-release.ts); the
+workflow only supplies credentials and a signing identity through the environment. It skips a tag
+that already exists, so the CI run triggered *by* the tag doesn't trip over it.
+
+### Release secrets
+
+The workflow needs these repository secrets. Without the Apple ones it still releases, with a
+warning, using ad-hoc signed macOS binaries:
+
+| Secret | What it is |
+| --- | --- |
+| `APPLE_CERT_P12_BASE64` | Developer ID Application certificate + private key, exported as `.p12`, base64'd |
+| `APPLE_CERT_PASSWORD` | the password set when exporting that `.p12` |
+| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Your Company LLC (TEAMID)` |
+| `APPLE_API_KEY_P8_BASE64` | App Store Connect API key (`.p8`), base64'd — notarization |
+| `APPLE_API_KEY_ID` / `APPLE_API_ISSUER_ID` | that key's ID and issuer UUID |
+| `NPM_TOKEN` | npm **Automation** token (a Publish token prompts for 2FA and the run hangs) |
+| `HOMEBREW_TAP_TOKEN` | PAT with `contents:write` on the tap repo |
+
+`GITHUB_TOKEN` is provided automatically. Signing and notarization only work on a macOS runner:
+`codesign` and `notarytool` are macOS-only tools.
 
 ## Architecture
 

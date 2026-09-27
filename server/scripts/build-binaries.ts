@@ -10,11 +10,13 @@
 //  - GitHub Releases (like most file-transfer paths) don't preserve the Unix
 //    executable bit on raw binary uploads; tar/zip carry it themselves, so
 //    it's restored correctly on extract.
-//  - Ad-hoc signing (no certificate, no paid Apple Developer account) doesn't
-//    get Gatekeeper's full trust, but it's what turns a flat "is damaged, move
-//    to Trash" refusal into a bypassable "unidentified developer" warning
-//    (right-click Open, or approve once in System Settings > Privacy &
-//    Security). Full notarization needs a real Apple Developer account.
+//  - Signing. With APPLE_SIGNING_IDENTITY set (the release workflow does this)
+//    the macOS binaries are signed with that Developer ID under the hardened
+//    runtime, ready for notarize-macos.ts. Without it — every local build —
+//    they're ad-hoc signed instead, which earns no Gatekeeper trust but does
+//    turn a flat "is damaged, move to Trash" refusal into a bypassable
+//    "unidentified developer" warning (right-click Open, or approve once in
+//    System Settings > Privacy & Security).
 //
 // Run `bun run build:web` first so server/public/index.html exists to embed.
 import { join } from "node:path";
@@ -43,6 +45,12 @@ async function run(cmd: string[], cwd: string) {
 
 const only = process.argv[2]; // optional: build just one target, e.g. "bun-darwin-arm64"
 
+// A Developer ID identity, e.g. "Developer ID Application: Parva Labs LLC (TEAMID)".
+// Unset (local builds) means ad-hoc signing.
+const identity = process.env.APPLE_SIGNING_IDENTITY;
+const ENTITLEMENTS = join(import.meta.dir, "entitlements.plist");
+if (identity) console.log(`Signing macOS binaries as: ${identity}`);
+
 for (const { target, os, suffix } of TARGETS) {
   if (only && target !== only) continue;
   console.log(`\n→ ${target}`);
@@ -55,7 +63,12 @@ for (const { target, os, suffix } of TARGETS) {
   );
 
   if (os === "darwin") {
-    await run(["codesign", "--force", "--sign", "-", binPath], root);
+    // --timestamp and --options runtime are both required for notarization;
+    // the entitlements keep JavaScriptCore's JIT working under that runtime.
+    const signArgs = identity
+      ? ["--sign", identity, "--options", "runtime", "--timestamp", "--entitlements", ENTITLEMENTS]
+      : ["--sign", "-"];
+    await run(["codesign", "--force", ...signArgs, binPath], root);
   }
 
   const archiveName = `local-slack-${suffix}${os === "windows" ? ".zip" : ".tar.gz"}`;
